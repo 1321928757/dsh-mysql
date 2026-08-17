@@ -1,0 +1,17 @@
+# dsh-mysql bundle patch.
+#
+# Installed through the official CLI —
+#
+#   dsh plugin --profile <name> add dsh-mysql
+#
+# — the command reconciles `dsh.profile.bundles` against the installed package
+# and, seeing the `dsh.bundle` declaration in package.json, appends this
+# package to the bundle stack. The profile boot then merges THIS patch (one
+# `insert` of the plugin row) over the base layers. No profile file edits
+# needed — one command installs and mounts.
+#
+# The row name is the bare package name so Node resolves it from the profile's
+# own node_modules where `dsh plugin add` installed it.
+- insert:
+    - id: dsh-mysql
+      name: dsh-mysql

@@ -1,0 +1,11 @@
+dsh-mysql
+Copyright (c) 2026 dsh-mysql contributors
+
+This product depends on the following open-source software:
+
+- mysql2 (https://github.com/sidorares/node-mysql2) — MIT License
+- zod (https://github.com/colinhacks/zod) — MIT License
+
+This product is a DeepSeek Harness plugin and interoperates with the
+DeepSeek Harness runtime through its public plugin interfaces. All DeepSeek
+Harness related trademarks belong to their respective owners.
