@@ -23,11 +23,11 @@ DeepSeek Harness 的 MySQL 连接插件。在 DSH 设置页配置多套 MySQL �
 
 ```powershell
 # 从 GitHub 安装（发布后推荐）
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.1
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.2
 
 # 或本地 tgz 安装
 pnpm pack
-dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.1.tgz
+dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.2.tgz
 ```
 
 然后**重启** `dsh web`（确认旧进程真的退出）。重启后打开 `设置 → MySQL 数据库`，添加连接并点「测试连接」。
