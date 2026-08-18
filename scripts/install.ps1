@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 # ── 版本（发布时三处同步：package.json / install.ps1 / README）───────────
 $Owner = '1321928757'
 $Repo = 'dsh-mysql'
-$Rev = 'v0.1.2' #dsh-mysql v0.1.2
+$Rev = 'v0.1.3' #dsh-mysql v0.1.3
 
 $Profile = 'web'
 

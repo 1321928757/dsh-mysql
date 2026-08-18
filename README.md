@@ -23,11 +23,11 @@ MySQL connector plugin for DeepSeek Harness. Configure multiple MySQL connection
 
 ```powershell
 # From npm / GitHub (recommended once published)
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.2
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.3
 
 # Or from a local tarball
 pnpm pack
-dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.2.tgz
+dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.3.tgz
 ```
 
 Then **restart** `dsh web` (make sure the old process really exited). After the restart, open `设置 → MySQL 数据库`, add a connection and press `测试连接`.
