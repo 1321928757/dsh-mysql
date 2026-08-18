@@ -7,7 +7,7 @@ DeepSeek Harness 的 MySQL 连接插件。在 DSH 设置页配置多套 MySQL �
 ## 功能
 
 - **设置页**（`设置 → MySQL 数据库`）：增 / 删 / 改 / 测试连接——主机、端口、账号、密码、默认库，每连接可配**可读表白名单**与**写权限**（默认关闭）。
-- **输入栏按钮**（🐬，输入框左侧）：为**当前会话**选择连接，随时切换；选中的连接与其可读表会自动注入每个 Agent 的系统提示词，模型天然知道当前该查哪个库。
+- **输入栏按钮**（🐬，输入框左侧）：为**当前会话**选择连接，随时切换；选中的连接与其可读表会注入每轮的运行时上下文快照（追加在对话末尾，切换连接或编辑配置不会改写用于上下文缓存的稳定系统提示词前缀），模型天然知道当前该查哪个库。
 - **全局工具**（所有 Agent 预设下都可用）：
 
 | 工具 | 用途 |
@@ -23,11 +23,11 @@ DeepSeek Harness 的 MySQL 连接插件。在 DSH 设置页配置多套 MySQL �
 
 ```powershell
 # 从 GitHub 安装（发布后推荐）
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.3
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.4
 
 # 或本地 tgz 安装
 pnpm pack
-dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.3.tgz
+dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.4.tgz
 ```
 
 然后**重启** `dsh web`（确认旧进程真的退出）。重启后打开 `设置 → MySQL 数据库`，添加连接并点「测试连接」。
@@ -60,7 +60,7 @@ dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.3.tgz
 node --check lib\index.js lib\shared.js lib\typert.host.js lib\client.js
 node test\shared.test.mjs
 pnpm pack
-dsh plugin --profile web add .\dsh-mysql-0.1.0.tgz
+dsh plugin --profile web add .\dsh-mysql-0.1.4.tgz
 # 重启 dsh web，浏览器验收
 ```
 

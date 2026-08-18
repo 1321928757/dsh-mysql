@@ -7,7 +7,7 @@ MySQL connector plugin for DeepSeek Harness. Configure multiple MySQL connection
 ## Features
 
 - **Settings page** (`设置 → MySQL 数据库`): add / edit / delete / test connections — host, port, user, password, default database, per-connection **table allowlist** and **write permission** (default off).
-- **Composer button** (🐬, left side of the input bar): pick the connection for the **current session only**; switch any time. The chosen connection and its readable tables are injected into the system prompt of every agent automatically.
+- **Composer button** (🐬, left side of the input bar): pick the connection for the **current session only**; switch any time. The chosen connection and its readable tables are injected into each turn's runtime-context snapshot (appended after the conversation, so switching or editing a connection never rewrites the stable system-prompt prefix used for context caching).
 - **Global tools** (available under every agent preset):
 
 | Tool | Purpose |
@@ -23,11 +23,11 @@ MySQL connector plugin for DeepSeek Harness. Configure multiple MySQL connection
 
 ```powershell
 # From npm / GitHub (recommended once published)
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.3
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.4
 
 # Or from a local tarball
 pnpm pack
-dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.3.tgz
+dsh plugin --profile web add C:\path\to\dsh-mysql-0.1.4.tgz
 ```
 
 Then **restart** `dsh web` (make sure the old process really exited). After the restart, open `设置 → MySQL 数据库`, add a connection and press `测试连接`.
@@ -60,7 +60,7 @@ If a preset previously embedded `mysql_query`/`mysql_execute` (e.g. a row loadin
 node --check lib\index.js lib\shared.js lib\typert.host.js lib\client.js
 node test\shared.test.mjs
 pnpm pack
-dsh plugin --profile web add .\dsh-mysql-0.1.0.tgz
+dsh plugin --profile web add .\dsh-mysql-0.1.4.tgz
 # restart dsh web, then verify in the browser
 ```
 
