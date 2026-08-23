@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 # ── 版本（发布时三处同步：package.json / install.ps1 / README）───────────
 $Owner = '1321928757'
 $Repo = 'dsh-mysql'
-$Rev = 'v0.1.4' #dsh-mysql v0.1.4
+$Rev = 'v0.1.9' #dsh-mysql v0.1.9
 
 $Profile = 'web'
 
@@ -34,4 +34,4 @@ Write-Host "==> dsh plugin --profile $Profile add github:${Owner}/${Repo}#$Rev" 
 
 Write-Host ''
 Write-Host '==> 安装完成。请重启 dsh web（确认旧进程已退出）后，' -ForegroundColor Green
-Write-Host '    打开 设置 -> MySQL 数据库 添加连接，并在输入栏左侧的 🐬 按钮选择连接。' -ForegroundColor Green
+Write-Host '    打开 设置 -> MySQL 数据库 添加连接，并在输入栏左侧的数据库连接按钮选择连接。' -ForegroundColor Green

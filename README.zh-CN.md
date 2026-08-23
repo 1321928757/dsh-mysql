@@ -2,10 +2,10 @@
 
 [English](README.md) | 中文
 
-DeepSeek Harness 的 MySQL 连接插件：在 DSH 设置页配置多套 MySQL 连接——每套带**可读表白名单**与**写权限开关**（默认关闭）——再通过输入栏旁的 🐬 按钮为当前会话切换连接。所有 Agent 预设立即获得 `mysql_query` / `mysql_tables` / `mysql_execute` 工具，无需修改任何预设。
+DeepSeek Harness 的 MySQL 连接插件：在 DSH 设置页配置多套 MySQL 连接——每套带**可读表白名单**与**写权限开关**（默认关闭）——再通过输入栏左侧的数据库连接按钮为当前会话切换连接。所有 Agent 预设立即获得 `mysql_query` / `mysql_tables` / `mysql_execute` 工具，无需修改任何预设。
 
 - **设置页**（`设置 → MySQL 数据库`）：增 / 删 / 改 / 测试连接——主机、端口、账号、密码、默认库，每连接可配**可读表白名单**与**写权限**（默认关闭）。
-- **输入栏按钮**（🐬，输入框左侧）：为**当前会话**选择连接，随时切换。选中的连接与其可读表会追加进每轮的运行时上下文快照，模型天然知道当前该查哪个库——用于上下文缓存的稳定系统提示词前缀不会被改写。
+- **输入栏按钮**（数据库图标，输入框左侧）：为**当前会话**选择连接，随时切换。选中的连接与其可读表会追加进每轮的运行时上下文快照，模型天然知道当前该查哪个库——用于上下文缓存的稳定系统提示词前缀不会被改写。
 - **全局工具**（所有 Agent 预设下都可用）：
 
 | 工具 | 用途 |
@@ -20,7 +20,7 @@ DeepSeek Harness 的 MySQL 连接插件：在 DSH 设置页配置多套 MySQL �
 ## 安装
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.4
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.9
 ```
 
 或从 npm 安装（发布后可用）：
@@ -32,10 +32,10 @@ dsh plugin --profile web add dsh-mysql
 PowerShell 一键安装（自动准备固定版本 pnpm、锁定版本、自检）：
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.4/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.9/scripts/install.ps1 | iex
 ```
 
-然后**重启** `dsh web`（确认旧进程真的退出）。重启后打开 `设置 → MySQL 数据库` 添加连接并点「测试连接」；输入栏左侧会出现 🐬 按钮。验证安装：
+然后**重启** `dsh web`（确认旧进程真的退出）。重启后打开 `设置 → MySQL 数据库` 添加连接并点「测试连接」；输入栏左侧会出现数据库连接按钮。验证安装：
 
 ```powershell
 dsh --profile web --dump-config | findstr dsh-mysql
@@ -48,7 +48,7 @@ dsh --profile web --dump-config | findstr dsh-mysql
 ## 快速上手
 
 1. 打开 **设置 → MySQL 数据库** → `+ 添加连接`，填写主机 / 端口 / 账号 / 密码 / 默认库，可选填可读表白名单（逗号分隔），决定是否开启写权限；点「测试连接」通过后「保存」。
-2. 在任意会话中，点击输入框左侧的 🐬 按钮，选择一个连接（仅当前会话生效；只配置一个连接时会自动选中）。
+2. 在任意会话中，点击输入框左侧的数据库连接按钮，选择一个连接（仅当前会话生效；只配置一个连接时会自动选中）。
 3. 直接向 Agent 提问数据库相关的问题——它会先用 `mysql_tables` 看结构、再用 `mysql_query` 查数据；连接开启写权限后，`mysql_execute` 可执行 `INSERT/UPDATE/DELETE`。
 
 ## 截图
@@ -57,7 +57,7 @@ dsh --profile web --dump-config | findstr dsh-mysql
 
 ![设置页](assets/settings.png)
 
-从输入栏 🐬 按钮展开的会话级连接选择器：
+从输入栏数据库连接按钮展开的会话级连接选择器：
 
 ![连接选择器](assets/picker.png)
 
@@ -76,7 +76,7 @@ Agent 在会话中调用 `mysql_query` 查询数据库的结果：
 ## 工作原理
 
 - **Host 半**（`lib/index.js`）：懒加载 mysql2 连接池（配置变更自动重建）、会话级选择映射、三个全局工具、追加在对话尾部的 `systemPrompt.context` 动态上下文，以及经 `remote.mysql.*` Typert RPC 暴露给浏览器的 `mysql` 服务（连接增删改查 / 测试 / 选择 / 表列表）。
-- **浏览器半**（`lib/client.js`）：`conversation.input.left` 槽位承载 🐬 按钮与选择面板；`settings.section` 槽位（id `mysql`）承载连接配置页。所有 UI 消费 `--dsw-*` 主题令牌，跟随全局亮/暗主题。
+- **浏览器半**（`lib/client.js`）：`conversation.input.left` 槽位承载数据库连接按钮与选择面板；`settings.section` 槽位（id `mysql`）承载连接配置页。所有 UI 消费 `--dsw-*` 主题令牌，跟随全局亮/暗主题。
 
 ## 从「预设内嵌 mysql 工具」迁移
 
@@ -92,7 +92,7 @@ Agent 在会话中调用 `mysql_query` 查询数据库的结果：
 node --check lib\index.js lib\shared.js lib\typert.host.js lib\client.js
 node test\shared.test.mjs
 pnpm pack
-dsh plugin --profile web add .\dsh-mysql-0.1.4.tgz
+dsh plugin --profile web add .\dsh-mysql-0.1.9.tgz
 # 重启 dsh web，浏览器验收
 ```
 

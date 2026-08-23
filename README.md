@@ -2,10 +2,10 @@
 
 English | [中文](README.zh-CN.md)
 
-MySQL connector plugin for DeepSeek Harness (DSH): configure multiple MySQL connections in the settings page — each with a **table allowlist** and a **write-permission switch** (default off) — then switch the active connection per session from a 🐬 button beside the composer. All agent presets immediately get `mysql_query` / `mysql_tables` / `mysql_execute` tools; no preset edits required.
+MySQL connector plugin for DeepSeek Harness (DSH): configure multiple MySQL connections in the settings page — each with a **table allowlist** and a **write-permission switch** (default off) — then switch the active connection per session from a database button beside the composer. All agent presets immediately get `mysql_query` / `mysql_tables` / `mysql_execute` tools; no preset edits required.
 
 - **Settings page** (`设置 → MySQL 数据库`): add / edit / delete / test connections — host, port, user, password, default database, per-connection table allowlist and write permission.
-- **Composer button** (🐬, left of the input bar): pick the connection for the current session; switch any time. The active connection and its readable tables are appended to each turn's runtime-context snapshot, so the model always knows which database to query — the cached system-prompt prefix is never rewritten.
+- **Composer button** (database icon, left of the input bar): pick the connection for the current session; switch any time. The active connection and its readable tables are appended to each turn's runtime-context snapshot, so the model always knows which database to query — the cached system-prompt prefix is never rewritten.
 - **Global tools** (available under every agent preset):
 
 | Tool | Purpose |
@@ -20,7 +20,7 @@ MySQL connector plugin for DeepSeek Harness (DSH): configure multiple MySQL conn
 ## Install
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.4
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.9
 ```
 
 Or from npm (once published):
@@ -32,10 +32,10 @@ dsh plugin --profile web add dsh-mysql
 PowerShell one-liner (bootstraps pnpm, pins versions, self-checks):
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.4/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.9/scripts/install.ps1 | iex
 ```
 
-Restart `dsh web` (make sure the old process really exited). After the restart, open `设置 → MySQL 数据库`, add a connection and press `测试连接`; the 🐬 button appears on the left of the composer. Verify:
+Restart `dsh web` (make sure the old process really exited). After the restart, open `设置 → MySQL 数据库`, add a connection and press `测试连接`; the database button appears on the left of the composer. Verify:
 
 ```powershell
 dsh --profile web --dump-config | findstr dsh-mysql
@@ -48,7 +48,7 @@ Uninstall: `dsh plugin --profile web remove dsh-mysql`
 ## Quick start
 
 1. Open **Settings → MySQL 数据库** → `+ 添加连接`; fill in host / port / user / password / default database, optionally list the readable tables (comma separated), decide whether to enable write permission. Press `测试连接`, then `保存`.
-2. In any conversation, click the 🐬 button on the left of the composer and pick the connection (per-session; a single configured connection is auto-selected).
+2. In any conversation, click the database button on the left of the composer and pick the connection (per-session; a single configured connection is auto-selected).
 3. Ask the agent anything about the database — it calls `mysql_tables` for the schema and `mysql_query` to read data; when the connection has write permission enabled, `mysql_execute` can run `INSERT/UPDATE/DELETE`.
 
 ## Screenshots
@@ -57,7 +57,7 @@ Settings page — connection cards with allowlist chips and read-only / writable
 
 ![Settings page](assets/settings.png)
 
-Per-session connection picker opened from the composer 🐬 button:
+Per-session connection picker opened from the composer database button:
 
 ![Connection picker](assets/picker.png)
 
@@ -76,7 +76,7 @@ The agent querying the database with `mysql_query` inside a conversation:
 ## How it works
 
 - **Host bundle** (`lib/index.js`): lazy mysql2 connection pools (rebuilt automatically on config change), a per-session selection map, three global tools, and a `systemPrompt.context` dynamic section appended after the conversation; a Typert service `mysql` (connection CRUD / test / selection / table list) is exposed to the browser via `remote.mysql.*` RPC.
-- **Browser bundle** (`lib/client.js`): the `conversation.input.left` slot hosts the 🐬 button and picker; the `settings.section` slot (id `mysql`) hosts the connection configuration page. All UI consumes `--dsw-*` theme tokens and follows the global light/dark theme.
+- **Browser bundle** (`lib/client.js`): the `conversation.input.left` slot hosts the database button and picker; the `settings.section` slot (id `mysql`) hosts the connection configuration page. All UI consumes `--dsw-*` theme tokens and follows the global light/dark theme.
 
 ## Migrating from a preset-embedded mysql tool
 
@@ -92,7 +92,7 @@ If a preset previously embedded `mysql_query`/`mysql_execute` (e.g. a row loadin
 node --check lib\index.js lib\shared.js lib\typert.host.js lib\client.js
 node test\shared.test.mjs
 pnpm pack
-dsh plugin --profile web add .\dsh-mysql-0.1.4.tgz
+dsh plugin --profile web add .\dsh-mysql-0.1.9.tgz
 # restart dsh web, then verify in the browser
 ```
 
