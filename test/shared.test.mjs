@@ -135,5 +135,49 @@ test('jsonSafe: Buffer → base64', () => {
   assert.equal(out.b, 'aGk=')
 })
 
+// ── 补充：多语句边界（注释 / 字符串 / 尾部连续分号）──────────────────────
+test('multi-statement: 注释与字符串内的分号不算多语句，尾部连续分号放行', () => {
+  assert.equal(hasMultipleStatements('INSERT INTO t VALUES (1); -- 尾部注释'), false)
+  assert.equal(hasMultipleStatements("UPDATE t SET a = ';'"), false)
+  assert.equal(hasMultipleStatements('SELECT 1;;'), false)
+  assert.equal(hasMultipleStatements('SELECT 1;SELECT 2'), true)
+})
+
+test('classify: EXPLAIN ANALYZE 归 read；未闭合块注释不炸', () => {
+  assert.equal(classifyStatement('EXPLAIN ANALYZE SELECT 1'), 'read')
+  assert.equal(classifyStatement('SELECT 1 /* 未闭合'), 'read')
+})
+
+// ── 补充：表引用提取（INSERT..SELECT / UPDATE JOIN / 反引号库名）────────────
+test('extractTableRefs: INSERT..SELECT 双表、UPDATE JOIN、反引号库名', () => {
+  assert.deepEqual(extractTableRefs('INSERT INTO t SELECT * FROM src'), ['t', 'src'])
+  assert.deepEqual(extractTableRefs('DELETE FROM t WHERE id IN (SELECT id FROM src)'), ['t', 'src'])
+  assert.deepEqual(extractTableRefs('UPDATE a JOIN b ON a.id=b.id SET a.x=1'), ['a', 'b'])
+  assert.deepEqual(extractTableRefs('SELECT * FROM db1.`order`'), ['order'])
+  assert.deepEqual(extractTableRefs('SELECT * FROM `db1`.`orders`'), ['orders'])
+})
+
+// ── 补充：白名单跨表校验 ───────────────────────────────────────────────────
+test('allowlist: INSERT..SELECT / UPDATE JOIN 引用的表都要在白名单内', () => {
+  assert.equal(checkTableAllowlist('INSERT INTO t SELECT * FROM src', ['t', 'src']).ok, true)
+  const denied = checkTableAllowlist('INSERT INTO t SELECT * FROM src', ['t'])
+  assert.equal(denied.ok, false)
+  assert.deepEqual(denied.denied, ['src'])
+  assert.equal(checkTableAllowlist('UPDATE a JOIN b ON a.id=b.id SET a.x=1', ['a', 'b']).ok, true)
+})
+
+// ── 补充：归一化上限与 JSON 安全转换透传 ────────────────────────────────────
+test('normalizeTables: 上限 200 张表', () => {
+  const many = Array.from({ length: 210 }, (_, i) => 't' + i)
+  assert.equal(normalizeTables(many).length, 200)
+})
+
+test('jsonSafe: undefined/null/普通对象原样透传（bigint/Date/Buffer 才转换）', () => {
+  const out = jsonSafe({ u: undefined, n: null, deep: { x: 1 } })
+  assert.equal(out.u, undefined)
+  assert.equal(out.n, null)
+  assert.deepEqual(out.deep, { x: 1 })
+})
+
 console.log('\n全部通过：' + passed + ' 组断言')
 console.log('MAX_ROWS =', MAX_ROWS)
