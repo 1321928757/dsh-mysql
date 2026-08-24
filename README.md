@@ -20,7 +20,7 @@ MySQL connector plugin for DeepSeek Harness (DSH): configure multiple MySQL conn
 ## Install
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.9
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.10
 ```
 
 Or from npm (once published):
@@ -32,7 +32,7 @@ dsh plugin --profile web add dsh-mysql
 PowerShell one-liner (bootstraps pnpm, pins versions, self-checks):
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.9/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.10/scripts/install.ps1 | iex
 ```
 
 Restart `dsh web` (make sure the old process really exited). After the restart, open `设置 → MySQL 数据库`, add a connection and press `测试连接`; the database button appears on the left of the composer. Verify:
@@ -92,7 +92,7 @@ If a preset previously embedded `mysql_query`/`mysql_execute` (e.g. a row loadin
 node --check lib\index.js lib\shared.js lib\typert.host.js lib\client.js
 node test\shared.test.mjs
 pnpm pack
-dsh plugin --profile web add .\dsh-mysql-0.1.9.tgz
+dsh plugin --profile web add .\dsh-mysql-0.1.10.tgz
 # restart dsh web, then verify in the browser
 ```
 

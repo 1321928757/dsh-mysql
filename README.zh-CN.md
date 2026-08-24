@@ -20,7 +20,7 @@ DeepSeek Harness 的 MySQL 连接插件：在 DSH 设置页配置多套 MySQL �
 ## 安装
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.9
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.10
 ```
 
 或从 npm 安装（发布后可用）：
@@ -32,7 +32,7 @@ dsh plugin --profile web add dsh-mysql
 PowerShell 一键安装（自动准备固定版本 pnpm、锁定版本、自检）：
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.9/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.10/scripts/install.ps1 | iex
 ```
 
 然后**重启** `dsh web`（确认旧进程真的退出）。重启后打开 `设置 → MySQL 数据库` 添加连接并点「测试连接」；输入栏左侧会出现数据库连接按钮。验证安装：
@@ -92,7 +92,7 @@ Agent 在会话中调用 `mysql_query` 查询数据库的结果：
 node --check lib\index.js lib\shared.js lib\typert.host.js lib\client.js
 node test\shared.test.mjs
 pnpm pack
-dsh plugin --profile web add .\dsh-mysql-0.1.9.tgz
+dsh plugin --profile web add .\dsh-mysql-0.1.10.tgz
 # 重启 dsh web，浏览器验收
 ```
 
