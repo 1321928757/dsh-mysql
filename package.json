@@ -25,6 +25,8 @@
     "README.md",
     "README.zh-CN.md",
     "CHANGELOG.md",
+    "screenshots.json",
+    "assets",
     "LICENSE",
     "NOTICE"
   ],

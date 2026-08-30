@@ -1,5 +1,8 @@
 [
- "assets/settings.png",
- "assets/picker.png",
- "assets/query.png"
+  "assets/settings.png",
+  "assets/conversation-no-connection.png",
+  "assets/conversation-picker.png",
+  "assets/conversation-connected.png",
+  "assets/conversation-context.png",
+  "assets/conversation-query.png"
 ]
