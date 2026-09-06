@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.11
+
+- 对齐 DSH Web 输入栏与设置页的交互样式，收敛按钮层级、悬浮态、展开态和焦点态。
+- 更新真实界面截图，统一使用 ASCII 文件名，并同步 README 与 `screenshots.json`。
+
 ## v0.1.10
 
 - 修复 `mysql_query` 返回日期/时间字段的时区偏移：连接池启用 `dateStrings: true`，原样返回 MySQL 的日期/时间字符串，不再按本机时区转 `Date` 后再 `toISOString()` 成 UTC。

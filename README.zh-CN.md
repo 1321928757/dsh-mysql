@@ -62,7 +62,7 @@
 ### 从 GitHub 安装
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.10
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.11
 ```
 
 ### 从 npm 安装
@@ -78,7 +78,7 @@ dsh plugin --profile web add dsh-mysql
 仓库提供 Windows 安装脚本：它会检查 `dsh` 是否在 PATH 中，在 `%USERPROFILE%\.dsh-tmp` 下准备固定版本的 pnpm 辅助程序，并把指定 GitHub 版本安装到 `web` profile：
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.10/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.11/scripts/install.ps1 | iex
 ```
 
 安装完成后重启 `dsh web`，再打开 **设置 → MySQL 数据库** 添加并测试连接，最后通过输入栏旁的数据库按钮选择连接。
@@ -121,37 +121,35 @@ dsh --profile demo --dump-config
 
 ## 截图
 
+以下截图均来自已加载插件的真实 DSH Web 页面。设置页中的连接名称和账号名称为示例值，截图不会展示密码。
+
 ### 配置数据库连接
 
-设置页将连接信息、数据库范围和权限分组展示，默认是只读模式。
+设置页将连接信息、数据库范围和权限分组展示，默认是只读模式。添加连接表单将 **保存连接** 作为主要操作，而 **测试连接** 使用更低调的次要按钮样式。
 
 ![MySQL 设置页](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/settings.png)
 
+表单会在已保存连接卡片下方展开，不需要离开设置页：
+
+![添加 MySQL 连接表单](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/settings-add-form.png)
+
 ### 为会话选择连接
 
-即使尚未选择连接，输入栏也会显示数据库控制按钮：
+即使尚未选择连接，输入栏也会显示数据库控制按钮；列表收起时，文字右侧显示向下箭头：
 
 ![未选择数据库连接的对话输入栏](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-no-connection.png)
 
-点击按钮后，可以搜索并从已配置的连接中选择：
+点击按钮后，可以搜索并从已配置的连接中选择；列表展开时箭头会切换为向上箭头：
 
 ![会话级数据库连接选择器](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-picker.png)
 
-选择后，输入栏会显示连接名称与状态：
+选择连接后，输入栏会显示连接名称、绿色连接状态点和向下箭头；选中的连接还会出现在发送给 Agent 的会话上下文中：
 
-![已选择数据库连接的对话输入栏](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-connected.png)
+![会话上下文中的已选连接](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-context.png)
 
-### 查看运行时上下文
+Agent 执行只读查询后，工具结果会显示在对话中：
 
-当前连接与可读表范围会作为动态上下文追加到本轮对话：
-
-![动态注入 Prompt 的数据库上下文](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-context.png)
-
-### 让 Agent 查看并查询数据库
-
-Agent 可以先查看表结构，再查询当前选中的数据库：
-
-![Agent 在会话中查询 MySQL](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-query.png)
+![MySQL 查询结果](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-query.png)
 
 ## 安全与权限
 

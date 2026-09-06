@@ -2,3 +2,7 @@ node_modules/
 *.tgz
 *.log
 .DS_Store
+
+# Local agent workflow artifacts; do not commit.
+.agents/
+openspec/

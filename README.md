@@ -62,7 +62,7 @@ Use mysql_tables to inspect the available schema first, then use mysql_query to 
 ### Install from GitHub
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.10
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.11
 ```
 
 ### Install from npm
@@ -78,7 +78,7 @@ dsh plugin --profile web add dsh-mysql
 The repository also provides a Windows installer that checks for `dsh`, prepares a pinned pnpm helper under `%USERPROFILE%\.dsh-tmp`, and installs the selected GitHub tag into the `web` profile:
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.10/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.11/scripts/install.ps1 | iex
 ```
 
 After installation, restart `dsh web`. Then open **Settings → MySQL 数据库**, add and test a connection, and select it from the database button beside the composer.
@@ -121,37 +121,35 @@ dsh --profile demo --dump-config
 
 ## Screenshots
 
+The screenshots below were captured from the real DSH Web shell with the plugin loaded. Connection names and account names in the settings example are illustrative; passwords are not shown.
+
 ### Configure a connection
 
-The settings page groups connection details, database scope, and permissions. Read-only is the default.
+The settings page groups connection details, database scope, and permissions. Read-only is the default. The add-connection form keeps **保存连接** as the primary action, while **测试连接** remains a quieter secondary action.
 
 ![MySQL settings page](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/settings.png)
 
+The form can be opened below the saved connection cards without leaving the settings page:
+
+![Add MySQL connection form](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/settings-add-form.png)
+
 ### Select a connection for a session
 
-The composer shows the database control even before a connection is selected:
+The composer shows the database control even before a connection is selected. Its arrow points down while the picker is closed:
 
 ![Composer without a selected database connection](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-no-connection.png)
 
-Click it to search and choose from the configured connections:
+Click it to search and choose from the configured connections. The arrow points up while the list is expanded:
 
 ![Per-session database connection picker](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-picker.png)
 
-After selection, the connection name and status appear in the composer:
+After a connection is selected, its name, green status dot, and down arrow appear in the composer. The selected connection is also included in the conversation context shown to the agent:
 
-![Composer with a selected database connection](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-connected.png)
+![Selected connection in conversation context](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-context.png)
 
-### See the selected connection in context
+After the agent runs a read-only query, the tool result is displayed in the conversation:
 
-The selected connection and readable table scope are appended as a dynamic context section for the current turn:
-
-![Dynamic database context injected into the prompt](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-context.png)
-
-### Let the agent inspect and query
-
-The agent can inspect the schema first and then query the selected database:
-
-![Agent querying MySQL in a conversation](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-query.png)
+![MySQL query result](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-query.png)
 
 ## Security and permissions
 
