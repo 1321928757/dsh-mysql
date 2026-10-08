@@ -52,6 +52,7 @@
 ## 环境要求与兼容性
 
 - 需要带 **Web profile** 的 DSH 安装，以及 Node.js **20 或更高版本**。
+- **需要 DSH 0.2.0-rc.2 及以上、低于 0.3.0。** 本插件 0.2.0 版把 Typert RPC 清单迁移到 DSH 0.2 的 strict codec 契约（`create()` factory），不再能在 DSH 0.1.x 上加载 —— 那种环境请使用插件 0.1.11。
 - 需要能通过配置的 TCP 主机与端口访问 MySQL 兼容数据库服务。
 - 当前连接表单支持主机、端口、用户名、密码、默认数据库、表白名单与写权限；没有提供 SSL/TLS、Unix socket / 命名管道或字符集配置项。
 - `MAX_EXECUTION_TIME` 优化器提示面向支持该特性的 MySQL 版本（MySQL 5.7.8+）。MariaDB 对该提示的处理可能不同；`SHOW`、`DESCRIBE`、`EXPLAIN` 不会注入该提示。
@@ -62,7 +63,7 @@
 ### 从 GitHub 安装
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.11
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.2.0
 ```
 
 ### 从 npm 安装
@@ -78,7 +79,7 @@ dsh plugin --profile web add dsh-mysql
 仓库提供 Windows 安装脚本：它会检查 `dsh` 是否在 PATH 中，在 `%USERPROFILE%\.dsh-tmp` 下准备固定版本的 pnpm 辅助程序，并把指定 GitHub 版本安装到 `web` profile：
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.11/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.2.0/scripts/install.ps1 | iex
 ```
 
 安装完成后重启 `dsh web`，再打开 **设置 → MySQL 数据库** 添加并测试连接，最后通过输入栏旁的数据库按钮选择连接。
@@ -246,22 +247,36 @@ Host mysql 服务
 
 ## 开发与验证
 
-逐个检查 JavaScript 文件，运行共享函数测试，然后打包本地构件：
+逐个检查 JavaScript 文件，运行共享函数测试与 Typert 契约测试，然后打包本地构件：
 
 ```powershell
 Get-ChildItem lib\*.js | ForEach-Object { node --check $_.FullName }
 node test\shared.test.mjs
+node test\typert.test.mjs
+node test\client-typert.test.mjs
 pnpm pack
 ```
+
+`node test\typert.test.mjs` 校验 Host 侧 `./typert` 清单（7 个 strict `create()` codec）；`node test\client-typert.test.mjs` 在受控环境里物化 `lib/client.js`，按 DSH 0.2 的规则校验客户端 remote 描述符与槽位注册。
+
+仓库还提供隔离的 DSH 0.2 验收脚本。它们绝不触碰既有 `dsh web` 实例：两者都使用一次性 `DSH_HOME`、一次性 profile 与一次性端口。
+
+```powershell
+pwsh -NoProfile -File scripts\dsh02-headless-smoke.ps1   # Host 组合、Typert loader、工具注册
+pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1        # 客户端 boot 图、槽位渲染、真实无头浏览器
+pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # 额外用真实 UI 打通 MySQL 的 RPC 面
+```
+
+`-RpcProbe` 会用真实浏览器驱动渲染出的 UI，逐个走通 `listConnections`、`saveConnection`、`testConnection`、`getSelection`、`selectConnection`、`deleteConnection`，并校验明文密码从不进入 DOM、保存的连接在刷新页面后仍在、探针结束后自行删除自己的连接。`listTables` 客户端从不调用（它服务于 Host 工具），因此由契约测试覆盖。
 
 将打包结果安装到独立测试 profile，验证真实 bundle：
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.1.10.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.2.0.tgz
 dsh --profile demo --dump-config
 ```
 
-发布新版本时，请同步更新 `package.json` 的版本号、`scripts/install.ps1` 中的 `$Rev`、两份 README 中的 tag 安装地址，以及发生截图变化时的 `screenshots.json`。
+发布新版本时，请同步更新 `package.json` 的版本号、`scripts/install.ps1` 中的 `$Rev`、两份 README 中的 tag 安装地址，以及发生截图变化时的 `screenshots.json`。**包版本与支持的 DSH 范围必须一起变更**：Typert codec 契约变更对旧运行时是破坏性的，因此版本号与 `engines.dsh` 范围要在同一次发布中更新。
 
 ## License
 

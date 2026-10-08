@@ -13,6 +13,7 @@ import {
   normalizeTables,
   checkTableAllowlist,
   jsonSafe,
+  describeDbError,
 } from '../lib/shared.js'
 
 let passed = 0
@@ -177,6 +178,57 @@ test('jsonSafe: undefined/null/普通对象原样透传（bigint/Date/Buffer 才
   assert.equal(out.u, undefined)
   assert.equal(out.n, null)
   assert.deepEqual(out.deep, { x: 1 })
+})
+
+// ── describeDbError：message 为空时不能退化成「Error」──────────────────────
+test('describeDbError: message 为空时补上 code/errno/sqlState（保持原有前缀不变）', () => {
+  // 实测：这台 MySQL 对 ER_PARSE_ERROR 返回的包 message 为空，mysql2 的
+  // message/sqlMessage 都是空串，此时只有 errno/code/sqlState 可用。
+  const parseError = Object.assign(new Error(''), {
+    code: 'ER_PARSE_ERROR',
+    errno: 1064,
+    sqlState: '42000',
+    sqlMessage: '',
+  })
+  assert.equal(describeDbError(parseError), 'MySQL 错误（ER_PARSE_ERROR 1064 42000）')
+})
+
+test('describeDbError: message 为 "Unknown error N" 时补上缺失的线索，不重复 errno', () => {
+  // 实测：这台 MySQL 的错误包 message 为空，mysql2 合成了 Unknown error <errno>。
+  assert.equal(
+    describeDbError(Object.assign(new Error('Unknown error 1146'), { code: 'ER_NO_SUCH_TABLE', errno: 1146, sqlState: '42S02' })),
+    'Unknown error 1146（ER_NO_SUCH_TABLE 42S02）',
+  )
+  assert.equal(
+    describeDbError(Object.assign(new Error('Unknown error 1054'), { code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22' })),
+    'Unknown error 1054（ER_BAD_FIELD_ERROR 42S22）',
+  )
+})
+
+test('describeDbError: 完整 message 的报错原样返回（ECONNREFUSED / fs 错误 / 真实 MySQL 描述）', () => {
+  assert.equal(
+    describeDbError(Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:3306'), { code: 'ECONNREFUSED', errno: -4078, syscall: 'connect' })),
+    'connect ECONNREFUSED 127.0.0.1:3306',
+  )
+  assert.equal(
+    describeDbError(Object.assign(new Error("ENOENT: no such file or directory, open 'x.json'"), { code: 'ENOENT', errno: -4058 })),
+    "ENOENT: no such file or directory, open 'x.json'",
+  )
+  assert.equal(
+    describeDbError(Object.assign(new Error("Duplicate entry '1' for key 'PRIMARY'"), { code: 'ER_DUP_ENTRY', errno: 1062, sqlState: '23000', sqlMessage: "Duplicate entry '1' for key 'PRIMARY'" })),
+    "Duplicate entry '1' for key 'PRIMARY'",
+  )
+})
+
+test('describeDbError: sqlMessage 兜底，非对象 / 空对象输入不抛错', () => {
+  assert.equal(describeDbError(Object.assign(new Error(''), { sqlMessage: 'Table x does not exist', errno: 1146 })), 'Table x does not exist')
+  assert.equal(describeDbError(Object.assign(new Error(''), { sqlMessage: 'Unknown error 1049', code: 'ER_BAD_DB_ERROR', errno: 1049, sqlState: '42000' })), 'Unknown error 1049（ER_BAD_DB_ERROR 42000）')
+  assert.equal(describeDbError(null), '未知错误')
+  assert.equal(describeDbError(undefined), '未知错误')
+  assert.equal(describeDbError('boom'), 'boom')
+  assert.equal(describeDbError(123), '123')
+  assert.equal(describeDbError({}), '未知错误')
+  assert.equal(describeDbError(new Error('')), '未知错误')
 })
 
 console.log('\n全部通过：' + passed + ' 组断言')

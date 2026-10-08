@@ -52,6 +52,7 @@ Use mysql_tables to inspect the available schema first, then use mysql_query to 
 ## Requirements and compatibility
 
 - A DSH installation with the **Web profile** and Node.js **20 or newer**.
+- **DSH 0.2.0-rc.2 or newer, below 0.3.0.** Version 0.2.0 of this plugin migrates its Typert RPC manifest to the DSH 0.2 strict codec contract (`create()` factory) and no longer loads on DSH 0.1.x — use plugin 0.1.11 there.
 - A MySQL-compatible server reachable through the configured TCP host and port.
 - The connection form currently supports host, port, username, password, default database, table allowlist, and write permission. It does not expose SSL/TLS, Unix socket/named-pipe, or charset options.
 - The `MAX_EXECUTION_TIME` optimizer hint is intended for MySQL versions that support it (MySQL 5.7.8+). MariaDB may handle this hint differently; `SHOW`, `DESCRIBE`, and `EXPLAIN` do not receive the hint.
@@ -62,7 +63,7 @@ Use mysql_tables to inspect the available schema first, then use mysql_query to 
 ### Install from GitHub
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.1.11
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.2.0
 ```
 
 ### Install from npm
@@ -78,7 +79,7 @@ dsh plugin --profile web add dsh-mysql
 The repository also provides a Windows installer that checks for `dsh`, prepares a pinned pnpm helper under `%USERPROFILE%\.dsh-tmp`, and installs the selected GitHub tag into the `web` profile:
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.1.11/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.2.0/scripts/install.ps1 | iex
 ```
 
 After installation, restart `dsh web`. Then open **Settings → MySQL 数据库**, add and test a connection, and select it from the database button beside the composer.
@@ -246,22 +247,36 @@ No. The browser receives a safe connection view containing `hasPassword`, not th
 
 ## Development
 
-Syntax-check each JavaScript file individually, run the shared-function tests, then pack a local artifact:
+Syntax-check each JavaScript file individually, run the shared-function and Typert contract tests, then pack a local artifact:
 
 ```powershell
 Get-ChildItem lib\*.js | ForEach-Object { node --check $_.FullName }
 node test\shared.test.mjs
+node test\typert.test.mjs
+node test\client-typert.test.mjs
 pnpm pack
 ```
+
+`node test\typert.test.mjs` validates the Host `./typert` manifest (seven strict `create()` codecs), and `node test\client-typert.test.mjs` materializes `lib/client.js` in a controlled environment to validate the Client remote descriptors and slot registrations against the DSH 0.2 rules.
+
+The repository also ships isolated DSH 0.2 acceptance scripts. They never touch an existing `dsh web` instance: both use a throwaway `DSH_HOME`, a throwaway profile, and a one-shot port.
+
+```powershell
+pwsh -NoProfile -File scripts\dsh02-headless-smoke.ps1   # Host composition, Typert loader, tool registration
+pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1        # Client boot graph, slot rendering, real headless browser
+pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # ... plus a UI-driven pass over the MySQL RPC surface
+```
+
+`-RpcProbe` drives the rendered UI through a real browser to exercise `listConnections`, `saveConnection`, `testConnection`, `getSelection`, `selectConnection`, and `deleteConnection`, and checks that the plaintext password never reaches the DOM, that a saved connection survives a page reload, and that the probe removes its own connection afterwards. `listTables` is never called by the client (it exists for the Host tools), so it is covered by the contract tests instead.
 
 Install the packed artifact into a scratch profile and verify the real bundle:
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.1.10.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.2.0.tgz
 dsh --profile demo --dump-config
 ```
 
-When releasing a new version, update the version in `package.json`, the `$Rev` value in `scripts/install.ps1`, the tagged install URLs in both README files, and `screenshots.json` if the screenshot set changes.
+When releasing a new version, update the version in `package.json`, the `$Rev` value in `scripts/install.ps1`, the tagged install URLs in both README files, and `screenshots.json` if the screenshot set changes. **Package version and supported DSH range move together:** a Typert codec contract change is breaking for the older runtime, so bump the version and the `engines.dsh` range in the same release.
 
 ## License
 

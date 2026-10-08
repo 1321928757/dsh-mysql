@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.2.0
+
+- **BREAKING：适配 DSH 0.2.0-rc.2 的 Typert 契约。** Host 与 Client 两侧的 strict RPC codec 都改为运行时要求的 `create()` factory 形状（旧形状只带 `schema` 字段，会被 `typert: ... strict codec has no create() factory` 拒绝），修复桌面端启动报 `web boot: 1 entry did not activate / dsh-mysql: failed`、`mysql` 服务无法注册的问题。
+- 声明兼容范围：`engines.dsh = ">=0.2.0-rc.2 <0.3.0"`、`node >= 20`，`@deepseek-ai/cordis` peer 收紧到 `~4.0.4`；本版本不再支持 DSH 0.1.x（该环境请继续使用 0.1.11）。
+- 新增 Typert 契约测试：`test/typert.test.mjs` 校验 Host 清单（7 方法、`create()` factory、reflection 身份、无残留 `schema` 字段），`test/client-typert.test.mjs` 在受控环境里物化 `lib/client.js` 并按真实 0.2 校验规则驱动 `apply()`，含「旧的 schema-only 形态必须被拒绝」的回归护栏。
+- 新增隔离验收脚本：`scripts/dsh02-headless-smoke.ps1`（一次性 profile 的 Host/loader/工具注册冒烟，不依赖 LLM 与网络）与 `scripts/dsh02-web-smoke.ps1` + `scripts/web-boot-probe.mjs`（一次性 profile/端口 + 真实无头浏览器，验证 boot 图含 `dsh-mysql`、无失败遮罩、输入栏连接控件真的渲染）。两者都绝不重启或修改既有的 3080 实例。
+- 新增 `scripts/web-rpc-probe.mjs`（可用 `scripts/dsh02-web-smoke.ps1 -RpcProbe` 启用）：用真实 UI 逐个打通 UI 上可见的 6 个 RPC 方法，并校验明文密码不落 DOM、刷新后连接仍在（已落盘）、探针结束后自行清理。
+- 修复报错文案退化：MySQL（或前置代理）返回 message 为空的错误包时，此前只会显示「查询失败：Error」/「Unknown error 1146」，把 `ER_PARSE_ERROR 1064`、`ER_NO_SUCH_TABLE 42S02` 这类关键线索丢掉了。现在 `mysql_query` / `mysql_tables` / `mysql_execute` / 测试连接 / 表列表 / 连接保存删除统一走 `describeDbError()`：message 信息量为零（空串或 `Unknown error <errno>`）时补上 `code` / `errno` / `sqlState`，而完整可读的报错（ECONNREFUSED、ENOENT、真实 MySQL 错误描述）保持原样、不追加噪音。
+
 ## v0.1.11
 
 - 对齐 DSH Web 输入栏与设置页的交互样式，收敛按钮层级、悬浮态、展开态和焦点态。

@@ -6,3 +6,7 @@ node_modules/
 # Local agent workflow artifacts; do not commit.
 .agents/
 openspec/
+
+# Scratch space for the isolated DSH 0.2 acceptance runs (throwaway DSH_HOME,
+# browser profile, smoke logs); never part of the package.
+.tmp/
