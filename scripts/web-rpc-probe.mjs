@@ -15,6 +15,7 @@
  *
  * 探针自带清理：开始与结束都通过 UI 删除自己的连接，可重复运行；结束时
  * `connections.json` 不残留探针连接。
+ * 表单提交还会验证 schema-change 开关默认关闭、独立风险确认必填，且编辑已授权连接时不会要求再次确认。
  *
  * 用法：node web-rpc-probe.mjs <url> <debugPort> [timeoutMs]
  * 输出一行 JSON；退出码始终为 0，由调用方按 verdict 判定。
@@ -108,6 +109,15 @@ const clickInSettings = (text) => evaluate(`(() => {
   el.click()
   return true
 })()`)
+const checkboxInSettings = (labelText, click = false) => evaluate(`(() => {
+   const scope = document.querySelector('.dsh-mysql-settings')
+   if (scope === null) return null
+   const label = Array.from(scope.querySelectorAll('label')).find((node) => (node.innerText || '').includes(${JSON.stringify(labelText)}))
+   const input = label && label.querySelector('input[type="checkbox"]')
+   if (input === null || input === undefined) return null
+   if (${click ? 'true' : 'false'}) input.click()
+   return input.checked === true
+ })()`)
 const setField = (index, value) => evaluate(`(() => {
   const el = document.querySelectorAll('.dsh-mysql-settings .dsh-mysql-input')[${index}]
   if (el === undefined) return false
@@ -160,7 +170,14 @@ record('设置页为空态（无遗留连接）', /还没有配置任何连接/.
 // ── 阶段 2：新建并保存（saveConnection）────────────────────────────────────
 record('点击「添加连接」', await clickInSettings('添加连接'))
 record('连接表单出现', await waitFor('document.querySelectorAll(".dsh-mysql-settings .dsh-mysql-input").length >= 5', 10000))
+record('展开权限与安全组', await clickInSettings('权限与安全'))
 await setField(0, PROBE_NAME)
+record('旧连接/新连接默认不授予 DDL', await checkboxInSettings('允许 Agent 执行结构变更（DDL）') === false)
+record('未确认时 DDL 授权开关可独立开启', await checkboxInSettings('允许 Agent 执行结构变更（DDL）', true) === true)
+record('权限摘要区分结构变更能力', /结构变更/.test(await settingsText()))
+await clickInSettings('保存连接')
+record('缺少 DDL 风险确认时保存被拦截', await waitFor('/开启结构变更权限前，请先勾选风险确认/.test((document.querySelector(".dsh-mysql-settings") || {}).innerText || "")', 3000))
+record('单独勾选 DDL 风险确认', await checkboxInSettings('我了解风险，允许 Agent 执行结构变更（DDL）', true) === true)
 await setField(1, '127.0.0.1')
 await setField(2, '3306')
 await setField(3, 'root')
@@ -171,8 +188,15 @@ const savedText = await (async () => {
   await waitFor(`/已保存：/.test((document.querySelector('.dsh-mysql-settings') || {}).innerText || '')`, 15000)
   return settingsText()
 })()
-record('保存通知与连接卡片出现', /已保存：/.test(savedText) && savedText.includes(PROBE_NAME), savedText.replace(/\s+/g, ' '))
+record('保存通知与授权连接卡片出现', /已保存：/.test(savedText) && savedText.includes(PROBE_NAME) && /结构变更/.test(savedText), savedText.replace(/\s+/g, ' '))
 record('明文密码未出现在 DOM', !savedText.includes(PROBE_PASSWORD))
+record('编辑已授权连接时 DDL 开关与确认均已保留', await (async () => {
+  await clickInSettings('编辑')
+  return await checkboxInSettings('允许 Agent 执行结构变更（DDL）') === true &&
+    await checkboxInSettings('我了解风险，允许 Agent 执行结构变更（DDL）') === true
+})())
+record('保存编辑后的已授权连接无需重新确认', await clickInSettings('保存连接'))
+record('编辑保存成功且卡片仍显示结构变更权限', await waitFor('/已保存：/.test((document.querySelector(".dsh-mysql-settings") || {}).innerText || "") && /结构变更/.test((document.querySelector(".dsh-mysql-settings") || {}).innerText || "")', 15000))
 
 // ── 阶段 3：刷新后仍在（持久化 → listConnections 读盘）────────────────────
 await send('Page.reload')
@@ -201,6 +225,7 @@ await openSettings() // 再次点击「设置」= 收起设置面板
 await sleep(1500)
 record('点击输入栏数据库按钮', await evaluate(`(() => { const b = document.querySelector('.dsh-mysql-btn'); if (b === null) return false; b.click(); return true })()`))
 record('连接选择面板出现', await waitFor('document.querySelectorAll(".dsh-mysql-panel").length >= 1', 10000))
+record('选择列表单独显示结构变更能力', await evaluate('document.querySelectorAll(".dsh-mysql-item .dsh-mysql-chip.ddl").length === 1'))
 record('点击连接项（selectConnection RPC）', await evaluate(`(() => {
   const item = document.querySelector('.dsh-mysql-item-main')
   if (item === null) return false

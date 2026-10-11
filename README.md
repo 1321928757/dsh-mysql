@@ -14,7 +14,7 @@
 
 English | [中文](README.zh-CN.md)
 
-`dsh-mysql` is a profile bundle for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness). It adds a settings page for multiple MySQL connections, a per-session connection picker beside the composer, and three guarded tools that every agent preset can use. No preset edits are required.
+`dsh-mysql` is a profile bundle for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness). It adds a settings page for multiple MySQL connections, a per-session connection picker beside the composer, and four guarded tools that every agent preset can use. No preset edits are required.
 
 > **Data boundary:** connection settings and passwords stay in your local DSH storage. Database schema and query results are sent to the LLM provider as ordinary tool output when the agent uses a database tool.
 
@@ -22,16 +22,17 @@ English | [中文](README.zh-CN.md)
 
 | Surface | What it provides |
 | --- | --- |
-| **Settings → MySQL 数据库** | Add, edit, delete, and test connections. Configure host, port, user, password, default database, table scope, and write permission. |
+| **Settings → MySQL 数据库** | Add, edit, delete, and test connections. Configure host, port, user, password, default database, table scope, row-write permission, and independent schema-change permission. |
 | **Composer database button** | Choose the connection for the current session. The selection is shown beside the input and can be changed at any time. |
-| **Agent tools + runtime context** | `mysql_tables`, `mysql_query`, and `mysql_execute`, plus a per-turn context snapshot describing the selected connection and readable tables. |
+| **Agent tools + runtime context** | `mysql_tables`, `mysql_query`, `mysql_execute`, and `mysql_ddl`, plus a per-turn context snapshot describing the selected connection and its capabilities. |
 
 ## Features
 
 - **Multiple connections:** keep separate development, staging, or production data sources in one DSH installation.
 - **Per-session selection:** changing the connection in one conversation does not silently switch another conversation.
 - **Schema-first workflow:** `mysql_tables` exposes readable columns, types, nullability, keys, and comments before a query is written.
-- **Read-only by default:** write access is an explicit per-connection setting and is disabled by default.
+- **Read-only by default:** row-write access and schema-change access are independent per-connection settings, both disabled by default and each requiring its own risk acknowledgement.
+- **Scoped schema changes:** `mysql_ddl` is separate from `mysql_execute`; changed/deleted targets are checked against the table allowlist, and explicit database qualifiers must match the connection's default database. Account/privilege and database-level statements remain refused.
 - **Local-first configuration:** the browser receives a safe connection view with `hasPassword`, never the stored password.
 - **No preset changes:** the tools are registered globally by the profile bundle and are available under every agent preset.
 
@@ -42,6 +43,15 @@ English | [中文](README.zh-CN.md)
 | `mysql_tables` | Lists columns from the selected database through `information_schema`. Optional `table` filtering is case-insensitive. Results respect the configured table allowlist. |
 | `mysql_query` | Executes one read-only `SELECT`, `SHOW`, `DESCRIBE`/`DESC`, or `EXPLAIN` statement with optional `?` parameters. It rejects multi-statement SQL, applies the table-scope check, and returns up to 2,000 serialized rows with a `truncated` flag. A `MAX_EXECUTION_TIME(15000)` hint is added to leading `SELECT` statements. |
 | `mysql_execute` | Executes one `INSERT`, `UPDATE`, or `DELETE` statement with optional `?` parameters. It requires `allowWrite: true`; DDL, transaction-control statements, multi-statement SQL, and other statement types are rejected. |
+| `mysql_ddl` | Executes one `CREATE`/`ALTER`/`DROP`/`RENAME`/`TRUNCATE` statement on tables, views, or indexes. It requires the independent `allowDdl: true` setting; changed/deleted targets obey the allowlist and all explicit database qualifiers must match the connection's default database. Account/privilege statements and database-level DDL are always rejected. |
+
+Schema changes require a separate opt-in and risk acknowledgement. Once enabled, you can ask the agent to create a table, for example:
+
+```text
+Inspect the current schema with mysql_tables, then create `agent_notes` in this connection's default database with an auto-increment id, title, and created_at timestamp. Show the CREATE TABLE SQL and execute it with mysql_ddl. Do not modify other tables.
+```
+
+If the connection has a non-empty table allowlist, add the new table to that list before asking the agent to read or write it with the existing tools.
 
 A typical read-only request is:
 
@@ -63,7 +73,7 @@ Use mysql_tables to inspect the available schema first, then use mysql_query to 
 ### Install from GitHub
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.2.0
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.0
 ```
 
 ### Install from npm
@@ -79,7 +89,7 @@ dsh plugin --profile web add dsh-mysql
 The repository also provides a Windows installer that checks for `dsh`, prepares a pinned pnpm helper under `%USERPROFILE%\.dsh-tmp`, and installs the selected GitHub tag into the `web` profile:
 
 ```powershell
-irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.2.0/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.3.0/scripts/install.ps1 | iex
 ```
 
 After installation, restart `dsh web`. Then open **Settings → MySQL 数据库**, add and test a connection, and select it from the database button beside the composer.
@@ -118,7 +128,7 @@ dsh --profile demo --dump-config
 
 1. Open **Settings → MySQL 数据库** and click **添加连接**. Fill in the host, port, username, password, and default database. Optionally add readable table names and enable write permission only when needed. Test the connection, then save it.
 2. Open a conversation and click the database button on the left of the composer. Select a connection for that session. If exactly one connection exists, it is selected automatically.
-3. Ask a database question. The agent can inspect the schema with `mysql_tables`, read with `mysql_query`, and use `mysql_execute` only for an explicitly writable connection.
+3. Ask a database question. The agent can inspect the schema with `mysql_tables`, read with `mysql_query`, use `mysql_execute` only for an explicitly writable connection, or use `mysql_ddl` only when the separate schema-change permission is enabled.
 
 ## Screenshots
 
@@ -158,9 +168,10 @@ The plugin uses multiple guardrails, but it does not replace database permission
 
 | Guardrail | What is enforced | Important boundary |
 | --- | --- | --- |
-| Statement type | `mysql_query` accepts read statements; `mysql_execute` accepts only `INSERT`/`UPDATE`/`DELETE`. | The tool layer is not a general SQL console. |
-| Write permission | `mysql_execute` requires the selected connection's `allowWrite` flag. | The switch is per connection and defaults to off. |
-| DDL and multi-statement SQL | DDL, transaction/control statements, and multiple statements are rejected. | Use normal database administration tools for schema changes or transactions. |
+| Statement type | `mysql_query` accepts read statements; `mysql_execute` accepts only `INSERT`/`UPDATE`/`DELETE`; `mysql_ddl` accepts the supported table/view/index schema changes. | The tool layer is not a general SQL console. |
+| Row-write permission | `mysql_execute` requires the selected connection's `allowWrite` flag. | Per connection, default off, with a separate risk acknowledgement. |
+| Schema-change permission | `mysql_ddl` requires the independent `allowDdl` flag; changed/deleted targets obey the allowlist, and explicit database qualifiers must match the default database. | Default off with a separate acknowledgement; account/privilege and database-level statements stay refused. |
+| Multi-statement SQL | Multiple statements and transaction/control statements are rejected. | Schema changes are issued one statement per call. |
 | Table allowlist | Checks table references detected after `FROM`, `JOIN`, `UPDATE`, and `INTO`. An empty list means no configured table restriction. | This is a lexical check, not a full SQL parser. Forms such as `DESCRIBE t` or `SHOW CREATE TABLE t` do not use those reference keywords; combine the allowlist with database-level grants. |
 | Result size | The serialized tool response contains at most 2,000 rows and reports `truncated: true` when rows were omitted. | The query is fetched before the response is truncated; this is not a server-side scan or network limit. |
 | Credential exposure | Passwords are stored in local `connections.json`; the browser receives only `hasPassword`. | Query results, schema, and tool arguments are still sent to the configured LLM provider. |
@@ -173,7 +184,7 @@ Passwords are stored as plain text in `$DSH_HOME/storages/dsh-mysql/connections.
 - `mysql_tables` uses the connection's `DATABASE()` value, so schema discovery may be empty when no default database is configured. It does not browse arbitrary databases.
 - The table allowlist is intentionally lightweight and checks common table-reference positions rather than parsing every MySQL grammar form.
 - The 2,000-row limit applies to the returned JSON payload after the database response has been fetched.
-- `mysql_execute` does not provide transaction management, DDL, or a confirmation workflow. Enable write permission only for a narrowly scoped database account.
+- `mysql_execute` remains limited to row writes; it does not provide transaction management or a confirmation workflow. `mysql_ddl` has no per-call approval; it is guarded by a per-connection opt-in, allowlist, and default-database boundary. Use a narrowly scoped database account.
 - Connection configuration is TCP-oriented and has no UI for SSL/TLS, Unix sockets/named pipes, or character-set selection.
 
 ## How it works
@@ -188,7 +199,7 @@ Host mysql service
         └── systemPrompt.context: selected connection + readable tables
 ```
 
-- **Host bundle (`lib/index.js`)** registers the three model tools, manages lazy mysql2 pools, persists connections, tracks the session selection, and provides the `mysql` service.
+- **Host bundle (`lib/index.js`)** registers the four model tools, manages lazy mysql2 pools, persists connections, tracks the session selection, and provides the `mysql` service.
 - **Typert manifest (`lib/typert.host.js`)** exposes connection CRUD, testing, selection, and table-list methods to the browser through `remote.mysql.*`.
 - **Browser bundle (`lib/client.js`)** registers the `conversation.input.left` database control and the `settings.section` connection-management page. UI styles consume DSH `--dsw-*` theme tokens.
 - The selected connection is added through `systemPrompt.context` as a dynamic tail section, so switching connections does not rewrite the stable cached system-prompt prefix.
@@ -234,7 +245,7 @@ Set a default database in the connection form. `mysql_tables` queries `informati
 <details>
 <summary><b>A write, DDL, multi-statement, or allowlist query was rejected</b></summary>
 
-Use `mysql_query` for one read statement and `mysql_execute` only for one `INSERT`/`UPDATE`/`DELETE` when `allowWrite` is enabled. Schema changes, transaction/control statements, multiple statements, and references outside the configured table scope are intentionally blocked. Remember that the allowlist is a lexical check; database-level grants remain the final boundary.
+Use `mysql_query` for one read statement and `mysql_execute` only for one `INSERT`/`UPDATE`/`DELETE` when `allowWrite` is enabled. To change schema, enable the independent `allowDdl` permission with its acknowledgement and use `mysql_ddl`; it accepts only table/view/index CREATE, ALTER, DROP, RENAME, or TRUNCATE in the default database. Account/privilege statements, database-level DDL, transaction/control statements, multiple statements, and references outside the configured table scope remain blocked. The allowlist is a lexical check; database-level grants remain the final boundary.
 
 </details>
 
@@ -267,12 +278,12 @@ pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1        # Client boot graph, sl
 pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # ... plus a UI-driven pass over the MySQL RPC surface
 ```
 
-`-RpcProbe` drives the rendered UI through a real browser to exercise `listConnections`, `saveConnection`, `testConnection`, `getSelection`, `selectConnection`, and `deleteConnection`, and checks that the plaintext password never reaches the DOM, that a saved connection survives a page reload, and that the probe removes its own connection afterwards. `listTables` is never called by the client (it exists for the Host tools), so it is covered by the contract tests instead.
+`-RpcProbe` drives the rendered UI through a real browser to exercise `listConnections`, `saveConnection`, `testConnection`, `getSelection`, `selectConnection`, and `deleteConnection`, and checks that schema-change authorization defaults off, cannot be saved without its separate acknowledgement, is preserved when editing an authorized connection, that capability badges are distinguishable, the plaintext password never reaches the DOM, a saved connection survives a page reload, and the probe removes its own connection afterwards. `listTables` is never called by the client (it exists for the Host tools), so it is covered by the contract tests instead.
 
 Install the packed artifact into a scratch profile and verify the real bundle:
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.2.0.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.3.0.tgz
 dsh --profile demo --dump-config
 ```
 

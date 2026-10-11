@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0
+
+- 新增每连接独立、默认关闭的 `allowDdl` 授权与单独风险确认；通过专用 `mysql_ddl` 工具执行受限的表/视图/索引结构变更。表白名单约束改动/删除目标，跨库目标（包括 ALTER RENAME 新目标及 CREATE ... AS SELECT 来源表）、账号/权限语句、库级 DDL 与多语句拒绝；DDL 使用文本协议执行。
+- 设置页连接卡片、权限摘要、输入栏连接状态和运行时上下文区分行写与结构变更能力；更新中英文 README、建表示例与隔离 Host 冒烟断言。
+- 修复 `mysql_tables` 在驱动返回大写 information_schema 字段标签时将表名/列名错误序列化为字面量 `undefined` 的问题；现在不区分字段标签大小写，并对必需元数据缺失 fail closed。
+
 ## v0.2.0
 
 - **BREAKING：适配 DSH 0.2.0-rc.2 的 Typert 契约。** Host 与 Client 两侧的 strict RPC codec 都改为运行时要求的 `create()` factory 形状（旧形状只带 `schema` 字段，会被 `typert: ... strict codec has no create() factory` 拒绝），修复桌面端启动报 `web boot: 1 entry did not activate / dsh-mysql: failed`、`mysql` 服务无法注册的问题。

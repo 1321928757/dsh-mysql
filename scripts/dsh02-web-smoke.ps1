@@ -12,7 +12,7 @@
        slot 注册成功、`getSelection` RPC 走通），且控件不是 RPC 失败态 `is-warn`。
 
   加 `-RpcProbe` 时，还会在同一个实例上用 `scripts/web-rpc-probe.mjs` 驱动真实 UI，
-  逐个打通 UI 上可见的 6 个 RPC 方法（listConnections / saveConnection /
+  逐个打通 UI 上可见的 6 个 RPC 方法（MySQL DDL 工具不新增 RPC）（listConnections / saveConnection /
   testConnection / getSelection / selectConnection / deleteConnection），
   并验证密码不落 DOM、刷新后连接仍在（落盘）、删除后回到空态。第 7 个方法
   `listTables` 客户端从不调用，由契约测试覆盖。

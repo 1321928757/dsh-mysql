@@ -8,8 +8,8 @@
 
     1. 组合后的 profile 树里含 `dsh-mysql` 行，且 Typert loader 行存在；
     2. 进程 stdout 报告 `[dsh-mysql] host mounted`；
-    3. 插件自己的 boot.log 报告工具注册（mysql_query / mysql_tables /
-       mysql_execute）、`service mysql provided`、`apply complete`；
+    3. 插件自己的 boot.log 报告四个工具注册（mysql_query / mysql_tables /
+       mysql_execute / mysql_ddl）、`service mysql provided`、`apply complete`；
     4. stderr 没有 `typert-loader:` 注册失败。
 
 .EXAMPLE
@@ -90,7 +90,7 @@ try {
   if ($stderr -match 'typert-loader:') { $failures += 'the Typert loader reported a dsh-mysql registration failure' }
 
   $boot = if (Test-Path $bootLog) { Get-Content $bootLog -Raw } else { '' }
-  if ($boot -notmatch 'tools registered: mysql_query, mysql_tables, mysql_execute') { $failures += 'the Host never registered all three MySQL tools' }
+  if ($boot -notmatch 'tools registered: mysql_query, mysql_tables, mysql_execute, mysql_ddl') { $failures += 'the Host never registered all four MySQL tools' }
   if ($boot -notmatch 'service mysql provided') { $failures += 'the Host never provided the mysql service' }
   if ($boot -notmatch 'apply complete') { $failures += 'the Host apply never completed' }
 

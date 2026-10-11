@@ -12,8 +12,12 @@ import {
   extractTableRefs,
   normalizeTables,
   checkTableAllowlist,
+  checkTableRefs,
+  extractDdlTargets,
+  checkDatabaseBoundary,
   jsonSafe,
   describeDbError,
+  groupColumnMetadata,
 } from '../lib/shared.js'
 
 let passed = 0
@@ -27,6 +31,48 @@ function test(name, fn) {
     throw err
   }
 }
+
+// ── information_schema row metadata ─────────────────────────────────────────
+test('groupColumnMetadata: case-insensitive mysql2 field labels', () => {
+  const result = groupColumnMetadata([
+    { TABLE_NAME: 'Users', COLUMN_NAME: 'id', COLUMN_TYPE: 'int', IS_NULLABLE: 'NO', COLUMN_KEY: 'PRI', COLUMN_COMMENT: '' },
+    { TABLE_NAME: 'Users', COLUMN_NAME: 'email', COLUMN_TYPE: 'varchar(64)', IS_NULLABLE: 'YES', COLUMN_KEY: '', COLUMN_COMMENT: 'mail' },
+  ])
+  assert.deepEqual(result, { ok: true, tables: [{ name: 'users', columns: [
+    { column: 'id', type: 'int', nullable: false, key: 'PRI', comment: '' },
+    { column: 'email', type: 'varchar(64)', nullable: true, key: '', comment: 'mail' },
+  ] }] })
+})
+test('groupColumnMetadata: empty rows are a valid empty table list', () => {
+  assert.deepEqual(groupColumnMetadata([]), { ok: true, tables: [] })
+})
+test('groupColumnMetadata: missing required fields fail closed instead of stringifying undefined', () => {
+  const result = groupColumnMetadata([{ TABLE_NAME: 'broken', COLUMN: 'id' }])
+  assert.equal(result.ok, false)
+  assert.match(result.error, /缺少必需字段/)
+  assert.doesNotMatch(JSON.stringify(result), /undefined/)
+})
+test('groupColumnMetadata: rows from another schema are excluded', () => {
+  const rows = [
+    { TABLE_SCHEMA: 'test', TABLE_NAME: 'shared', COLUMN_NAME: 'id', COLUMN_TYPE: 'int', IS_NULLABLE: 'NO' },
+    { TABLE_SCHEMA: 'other', TABLE_NAME: 'shared', COLUMN_NAME: 'secret', COLUMN_TYPE: 'varchar(8)', IS_NULLABLE: 'YES' },
+  ]
+  assert.deepEqual(groupColumnMetadata(rows, [], '', 'test'), { ok: true, tables: [{ name: 'shared', columns: [
+    { column: 'id', type: 'int', nullable: false, key: '', comment: '' },
+  ] }] })
+})
+test('groupColumnMetadata: allowlist and fuzzy filter remain in force', () => {
+  const rows = [
+    { TABLE_NAME: 'users', COLUMN_NAME: 'id', COLUMN_TYPE: 'int', IS_NULLABLE: 'NO' },
+    { TABLE_NAME: 'orders', COLUMN_NAME: 'id', COLUMN_TYPE: 'int', IS_NULLABLE: 'NO' },
+  ]
+  assert.deepEqual(groupColumnMetadata(rows, ['users'], ''), { ok: true, tables: [{ name: 'users', columns: [
+    { column: 'id', type: 'int', nullable: false, key: '', comment: '' },
+  ] }] })
+  assert.deepEqual(groupColumnMetadata(rows, [], 'order'), { ok: true, tables: [{ name: 'orders', columns: [
+    { column: 'id', type: 'int', nullable: false, key: '', comment: '' },
+  ] }] })
+})
 
 // ── classifyStatement ───────────────────────────────────────────────────────
 test('classify: SELECT 归为 read', () => {
@@ -44,17 +90,49 @@ test('classify: 行注释与块注释不影响分类', () => {
   assert.equal(classifyStatement('# mysql 注释\nUPDATE t SET a=1'), 'write-dml')
 })
 
-test('classify: DML 归为 write-dml，DDL 归为 forbidden', () => {
+test('classify: DML 归为 write-dml', () => {
   assert.equal(classifyStatement('INSERT INTO t VALUES (1)'), 'write-dml')
   assert.equal(classifyStatement('UPDATE t SET a=1'), 'write-dml')
   assert.equal(classifyStatement('DELETE FROM t'), 'write-dml')
-  assert.equal(classifyStatement('DROP TABLE t'), 'forbidden')
-  assert.equal(classifyStatement('TRUNCATE t'), 'forbidden')
-  assert.equal(classifyStatement('ALTER TABLE t ADD c INT'), 'forbidden')
-  assert.equal(classifyStatement('CREATE TABLE t (id INT)'), 'forbidden')
-  assert.equal(classifyStatement('SET SESSION x=1'), 'forbidden')
-  assert.equal(classifyStatement('REPLACE INTO t VALUES (1)'), 'forbidden')
   assert.equal(classifyStatement('  '), 'empty')
+})
+
+test('classify: 结构变更归为 ddl（仅 allowDdl 连接可放行）', () => {
+  assert.equal(classifyStatement('CREATE TABLE t (id INT)'), 'ddl')
+  assert.equal(classifyStatement('create table t (id int)'), 'ddl')
+  assert.equal(classifyStatement('CREATE TEMPORARY TABLE t (id INT)'), 'ddl')
+  assert.equal(classifyStatement('CREATE OR REPLACE VIEW v AS SELECT 1'), 'ddl')
+  assert.equal(classifyStatement('CREATE UNIQUE INDEX i ON t (a)'), 'ddl')
+  assert.equal(classifyStatement('ALTER TABLE t ADD c INT'), 'ddl')
+  assert.equal(classifyStatement('ALTER TABLE t DROP COLUMN c'), 'ddl')
+  assert.equal(classifyStatement('ALTER VIEW v AS SELECT 1'), 'ddl')
+  assert.equal(classifyStatement('DROP TABLE t'), 'ddl')
+  assert.equal(classifyStatement('DROP TABLE IF EXISTS t'), 'ddl')
+  assert.equal(classifyStatement('DROP VIEW v'), 'ddl')
+  assert.equal(classifyStatement('DROP INDEX i ON t'), 'ddl')
+  assert.equal(classifyStatement('RENAME TABLE a TO b'), 'ddl')
+  assert.equal(classifyStatement('TRUNCATE t'), 'ddl')
+  assert.equal(classifyStatement('TRUNCATE TABLE t'), 'ddl')
+  assert.equal(classifyStatement('-- 建表\nCREATE TABLE t (id INT)'), 'ddl')
+})
+
+test('classify: 账号/权限类与库级语句永久 forbidden（与 allowDdl 无关）', () => {
+  assert.equal(classifyStatement('CREATE USER u'), 'forbidden')
+  assert.equal(classifyStatement('ALTER USER u IDENTIFIED BY x'), 'forbidden')
+  assert.equal(classifyStatement('DROP USER u'), 'forbidden')
+  assert.equal(classifyStatement('CREATE ROLE r'), 'forbidden')
+  assert.equal(classifyStatement('DROP ROLE r'), 'forbidden')
+  assert.equal(classifyStatement('GRANT ALL ON *.* TO u'), 'forbidden')
+  assert.equal(classifyStatement('REVOKE ALL ON *.* FROM u'), 'forbidden')
+  assert.equal(classifyStatement('CREATE DATABASE d'), 'forbidden')
+  assert.equal(classifyStatement('ALTER DATABASE d'), 'forbidden')
+  assert.equal(classifyStatement('DROP DATABASE d'), 'forbidden')
+  assert.equal(classifyStatement('CREATE TRIGGER tr BEFORE INSERT ON t FOR EACH ROW SET @x=1'), 'forbidden')
+  assert.equal(classifyStatement('SET SESSION x=1'), 'forbidden')
+  assert.equal(classifyStatement('USE other'), 'forbidden')
+  assert.equal(classifyStatement('CALL p()'), 'forbidden')
+  assert.equal(classifyStatement('REPLACE INTO t VALUES (1)'), 'forbidden')
+  assert.equal(classifyStatement('LOCK TABLES t WRITE'), 'forbidden')
 })
 
 // ── hasMultipleStatements ───────────────────────────────────────────────────
@@ -165,6 +243,81 @@ test('allowlist: INSERT..SELECT / UPDATE JOIN 引用的表都要在白名单内'
   assert.equal(denied.ok, false)
   assert.deepEqual(denied.denied, ['src'])
   assert.equal(checkTableAllowlist('UPDATE a JOIN b ON a.id=b.id SET a.x=1', ['a', 'b']).ok, true)
+})
+
+// ── 补充：结构变更目标提取与跨库边界 ────────────────────────────────────────
+const ddlNames = (refs) => refs.map((r) => r.name)
+
+test('extractDdlTargets: ALTER/DROP/TRUNCATE/RENAME 的目标', () => {
+  assert.deepEqual(ddlNames(extractDdlTargets('ALTER TABLE t ADD c INT').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('ALTER TABLE IF EXISTS t ADD c INT').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('DROP TABLE t').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('DROP TABLE IF EXISTS a, b').mutated), ['a', 'b'])
+  assert.deepEqual(ddlNames(extractDdlTargets('DROP TEMPORARY TABLE t').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('TRUNCATE t').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('TRUNCATE TABLE t').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('RENAME TABLE a TO b').mutated), ['a', 'b'])
+  assert.deepEqual(ddlNames(extractDdlTargets('RENAME TABLE a TO b, c TO d').mutated), ['a', 'b', 'c', 'd'])
+  assert.deepEqual(ddlNames(extractDdlTargets('ALTER TABLE t RENAME TO other.t2').mutated), ['t', 't2'])
+  assert.deepEqual(ddlNames(extractDdlTargets('ALTER TABLE t RENAME AS other.t2').mutated), ['t', 't2'])
+  assert.deepEqual(ddlNames(extractDdlTargets('ALTER TABLE t RENAME COLUMN a TO b').mutated), ['t'])
+})
+
+test('extractDdlTargets: 新建对象进 created，索引语句认 ON 之后的表', () => {
+  const create = extractDdlTargets('CREATE TABLE t (id INT)')
+  assert.deepEqual(ddlNames(create.created), ['t'])
+  assert.deepEqual(create.mutated, [])
+  assert.deepEqual(ddlNames(extractDdlTargets('CREATE VIEW v AS SELECT 1').created), ['v'])
+  assert.deepEqual(ddlNames(extractDdlTargets('CREATE INDEX i ON t (a)').created), ['i'])
+  assert.deepEqual(ddlNames(extractDdlTargets('CREATE INDEX i ON t (a)').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('CREATE UNIQUE INDEX i ON t (a)').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('DROP INDEX i ON t').mutated), ['t'])
+  assert.deepEqual(ddlNames(extractDdlTargets('ALTER TABLE t DROP INDEX i').mutated), ['t'])
+})
+
+test('extractDdlTargets: CREATE TABLE .. AS SELECT 同时给出新表与来源表', () => {
+  const sql = 'CREATE TABLE t AS SELECT * FROM src'
+  const ddl = extractDdlTargets(sql)
+  assert.deepEqual(ddlNames(ddl.created), ['t'])
+  assert.deepEqual(extractTableRefs(sql), ['src'])
+  assert.deepEqual(ddlNames(ddl.referenced), ['src'])
+  assert.equal(checkDatabaseBoundary(ddl.referenced, 'shop').ok, true)
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('CREATE TABLE t AS SELECT * FROM other.src').referenced, 'shop').ok, false)
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('CREATE TABLE t LIKE other.src').referenced, 'shop').ok, false)
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('CREATE TABLE child (parent_id INT, FOREIGN KEY (parent_id) REFERENCES other.parent(id))').referenced, 'shop').ok, false)
+  // 白名单只列 src：新表 t 豁免，来源表 src 必须命中
+  const checked = checkTableRefs([...ddlNames(ddl.mutated), ...extractTableRefs(sql)], ['src'])
+  assert.equal(checked.ok, true)
+  const denied = checkTableRefs([...ddlNames(ddl.mutated), ...extractTableRefs(sql)], ['other'])
+  assert.equal(denied.ok, false)
+  assert.deepEqual(denied.denied, ['src'])
+})
+
+test('extractDdlTargets: 反引号与库名前缀（含名字本身带点的整体反引号）', () => {
+  const ref = extractDdlTargets('DROP TABLE `db1`.`Orders`').mutated[0]
+  assert.equal(ref.name, 'orders')
+  assert.equal(ref.database, 'db1')
+  const renamed = extractDdlTargets('ALTER TABLE t RENAME TO `db1`.`new name`').mutated[1]
+  assert.equal(renamed.database, 'db1')
+  assert.equal(renamed.name, 'new name')
+  const bare = extractDdlTargets('DROP TABLE db1.orders').mutated[0]
+  assert.equal(bare.name, 'orders')
+  assert.equal(bare.database, 'db1')
+  const weird = extractDdlTargets('DROP TABLE `weird.name`').mutated[0]
+  assert.equal(weird.name, 'weird.name')
+  assert.equal(weird.database, '')
+})
+
+test('checkDatabaseBoundary: 未加前缀或本库放行，跨库拒绝', () => {
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('DROP TABLE t').mutated, 'shop').ok, true)
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('DROP TABLE shop.t').mutated, 'shop').ok, true)
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('DROP TABLE SHOP.t').mutated, 'shop').ok, true)
+  const denied = checkDatabaseBoundary(extractDdlTargets('DROP TABLE other.t').mutated, 'shop')
+  assert.equal(denied.ok, false)
+  assert.deepEqual(denied.denied, ['other.t'])
+  // 未配置默认库时，任何显式库名前缀都拒绝
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('DROP TABLE shop.t').mutated, '').ok, false)
+  assert.equal(checkDatabaseBoundary(extractDdlTargets('DROP TABLE t').mutated, '').ok, true)
 })
 
 // ── 补充：归一化上限与 JSON 安全转换透传 ────────────────────────────────────
