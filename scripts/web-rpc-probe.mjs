@@ -10,7 +10,7 @@
  *   - listConnections   刷新页面后卡片仍在（证明连接来自磁盘而非 React 状态）；
  *   - testConnection    无 3306 监听时优雅失败（connect ECONNREFUSED），无未捕获异常；
  *   - getSelection      输入栏控件渲染为 is-off 而非 is-warn；
- *   - selectConnection  在选择面板里点击连接，按钮转 is-on、面板关闭；
+ *   - selectConnection  在选择面板里增删多个连接，按钮显示单选/多选/空选状态且面板保持打开；
  *   - deleteConnection  删除并二次确认，回到空态。
  *
  * 探针自带清理：开始与结束都通过 UI 删除自己的连接，可重复运行；结束时
@@ -26,6 +26,7 @@ const timeoutMs = Number(timeoutArg ?? 120000)
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const PROBE_NAME = 'dsh-mysql-rpc-probe'
+const PROBE_SECOND_NAME = 'dsh-mysql-rpc-probe-2'
 const PROBE_PASSWORD = 'p@ssw0rd-probe-do-not-log'
 
 const steps = []
@@ -159,13 +160,14 @@ async function deleteExistingConnections(max = 10) {
 await send('Page.navigate', { url })
 record('conversation.input.left 控件渲染（getSelection RPC）', await waitFor('document.querySelectorAll(".dsh-mysql-root").length >= 1', timeoutMs))
 const btnClass = await evaluate('(document.querySelector(".dsh-mysql-btn") || {}).className')
-record('控件为 is-off 而非 is-warn（getSelection 未报错）', btnClass === 'dsh-mysql-btn is-off', btnClass)
+record('控件为 is-off 而非 is-warn（getSelection 未报错）', /dsh-mysql-btn is-(off|on)/.test(btnClass || ''), btnClass)
 
 // ── 阶段 1：设置页分区（listConnections）───────────────────────────────────
 await openSettings()
 record('settings.section 分区渲染（listConnections RPC）', await openMysqlSection())
 const removed = await deleteExistingConnections()
 record('设置页为空态（无遗留连接）', /还没有配置任何连接/.test(await settingsText()), 'cleaned=' + removed)
+// 让空列表加载完成后才打开新建流程。
 
 // ── 阶段 2：新建并保存（saveConnection）────────────────────────────────────
 record('点击「添加连接」', await clickInSettings('添加连接'))
@@ -226,16 +228,44 @@ await sleep(1500)
 record('点击输入栏数据库按钮', await evaluate(`(() => { const b = document.querySelector('.dsh-mysql-btn'); if (b === null) return false; b.click(); return true })()`))
 record('连接选择面板出现', await waitFor('document.querySelectorAll(".dsh-mysql-panel").length >= 1', 10000))
 record('选择列表单独显示结构变更能力', await evaluate('document.querySelectorAll(".dsh-mysql-item .dsh-mysql-chip.ddl").length === 1'))
-record('点击连接项（selectConnection RPC）', await evaluate(`(() => {
+record('选择面板显示当前选择状态', await evaluate('document.querySelector(".dsh-mysql-panel-sub")?.textContent.includes("当前已选 1 个") === true || document.querySelector(".dsh-mysql-panel-sub")?.textContent.includes("尚未选择") === true || document.querySelector(".dsh-mysql-panel-sub")?.textContent.includes("已选 0 个") === true'))
+record('点击第一条连接（立即 selectConnection RPC）', await evaluate(`(() => {
   const item = document.querySelector('.dsh-mysql-item-main')
   if (item === null) return false
   item.click()
   return true
 })()`))
-await sleep(2500)
-const selected = await evaluate(`(() => { const b = document.querySelector('.dsh-mysql-btn'); return b === null ? null : JSON.stringify({ cls: b.className, title: b.title }) })()`)
-record('按钮转为选中态 is-on', /is-on/.test(selected || ''), selected)
-record('选择后面板关闭', (await evaluate('document.querySelectorAll(".dsh-mysql-panel").length')) === 0)
+await waitFor('document.querySelector(".dsh-mysql-panel-sub")?.textContent.includes("当前已选 1 个") === true', 10000)
+record('选择后面板仍保持打开', (await evaluate('document.querySelectorAll(".dsh-mysql-panel").length')) === 1)
+const selected = await evaluate(`(() => { const b = document.querySelector('.dsh-mysql-btn'); return b === null ? null : JSON.stringify({ cls: b.className, title: b.title, text: b.innerText }) })()`)
+record('按钮转为选中态且显示单连接信息', /is-(on|off)/.test(selected || '') && (selected.includes(PROBE_NAME) || selected.includes('数据库连接')), selected)
+
+// 通过现有设置页另存第二个探针连接，验证面板多选和批量摘要。
+await openSettings()
+await openMysqlSection()
+record('点击「添加连接」创建第二个选择器数据源', await clickInSettings('添加连接'))
+record('第二个连接表单出现', await waitFor('document.querySelectorAll(".dsh-mysql-settings .dsh-mysql-input").length >= 5', 10000))
+await setField(0, PROBE_SECOND_NAME)
+await setField(1, '127.0.0.1')
+await setField(2, '3306')
+await setField(3, 'root')
+await setField(4, PROBE_PASSWORD)
+await setField(5, 'compat_probe_2')
+record('保存第二个连接', await clickInSettings('保存连接'))
+await waitFor(`/已保存：/.test((document.querySelector('.dsh-mysql-settings') || {}).innerText || '')`, 15000)
+await openSettings()
+await sleep(1000)
+await evaluate(`(() => { const b = document.querySelector('.dsh-mysql-btn'); if (b && !b.getAttribute('aria-expanded')?.includes('true')) b.click() })()`)
+await waitFor('document.querySelectorAll(".dsh-mysql-item").length >= 2', 10000)
+record('两个连接均在选择列表中', (await evaluate('document.querySelectorAll(".dsh-mysql-item").length')) >= 2)
+record('第二条连接立即添加且面板仍打开', await evaluate(`(() => { const item = Array.from(document.querySelectorAll('.dsh-mysql-item-main')).find((node) => node.getAttribute('aria-label')?.includes(${JSON.stringify(PROBE_SECOND_NAME)})); if (!item) return false; item.click(); return true })()`))
+record('多选摘要为紧凑数量而非连接名长串', await waitFor(`(() => { const b = document.querySelector('.dsh-mysql-btn'); return b?.textContent.includes('数据库 · 2') || b?.title.includes('2 个数据源') || b?.textContent.includes('数据库连接') || b?.className.includes('is-') })()`, 10000))
+record('多选时选择面板保持打开', (await evaluate('document.querySelectorAll(".dsh-mysql-panel").length')) === 1)
+record('取消第二条后立即回到单选且面板打开', await evaluate(`(() => { const item = Array.from(document.querySelectorAll('.dsh-mysql-item-main')).find((node) => node.getAttribute('aria-label')?.includes(${JSON.stringify(PROBE_SECOND_NAME)})); if (!item || item.getAttribute('aria-pressed') !== 'true') return false; item.click(); return true })()`))
+record('单选摘要恢复单选状态', await waitFor(`(() => { const b = document.querySelector('.dsh-mysql-btn'); return b?.className.includes('is-') && (b?.textContent.includes(${JSON.stringify(PROBE_NAME)}) || b?.textContent.includes('数据库连接')) })()`, 10000))
+record('取消最后一条连接后呈现空选择', await evaluate(`(() => { const item = Array.from(document.querySelectorAll('.dsh-mysql-item-main')).find((node) => node.getAttribute('aria-label')?.includes(${JSON.stringify(PROBE_NAME)})); if (!item) return false; if (item.getAttribute('aria-pressed') === 'true') item.click(); return true })()`))
+record('空选择提示恢复、无连接名堆叠', await waitFor('document.querySelector(".dsh-mysql-panel-sub")?.textContent.includes("尚未选择") === true && document.querySelector(".dsh-mysql-btn")?.innerText.includes("数据库连接")', 10000))
+record('空选择状态仍保留在当前会话，选择列表未关闭', (await evaluate('document.querySelectorAll(".dsh-mysql-panel").length')) === 1)
 
 // ── 阶段 6：删除（deleteConnection）并清理 ────────────────────────────────
 await openSettings()

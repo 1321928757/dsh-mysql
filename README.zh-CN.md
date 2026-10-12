@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>DeepSeek Harness 的 MySQL 连接与安全数据库工具</b><br />
-  一次配置连接，按会话选择数据源，让 Agent 查询你当前选中的数据库。
+  一次配置连接，每个会话可选一个或多个数据源，让 Agent 按工具调用路由到已选数据库。
 </p>
 
 <p align="center">
@@ -23,13 +23,14 @@
 | 入口 | 提供能力 |
 | --- | --- |
 | **设置 → MySQL 数据库** | 新增、编辑、删除、测试连接；配置主机、端口、用户名、密码、默认数据库、表访问范围、行写权限与独立的结构变更权限。 |
-| **输入栏数据库按钮** | 为当前会话选择连接。选中的连接会显示在输入栏旁，并可随时切换。 |
-| **Agent 工具 + 运行时上下文** | 提供 `mysql_tables`、`mysql_query`、`mysql_execute`、`mysql_ddl`，并在每轮对话中注入当前连接与权限状态。 |
+| **输入栏数据库按钮** | 为当前会话选择或取消选择一个或多个数据源，每次点击立即生效；输入栏胶囊显示单个名称或简洁的已选数量。 |
+| **Agent 工具 + 运行时上下文** | 提供 `mysql_tables`、`mysql_query`、`mysql_execute`、`mysql_ddl`，并在每轮对话中列出当前会话已选数据源及各自权限。 |
 
 ## 功能特性
 
 - **多连接管理：**可在同一套 DSH 中保存开发、测试、生产等不同数据源。
-- **会话级选择：**一个会话切换连接不会悄悄影响其他会话。
+- **会话级多选：**每个会话可独立选择零个、一个或多个数据源，不影响其他会话；勾选或取消立即生效。取消最后一个后该会话的数据库工具不可用，需重新选择才能恢复；会话选择保存在运行时内存中，DSH 重启后不会恢复。
+- **单次调用单一目标：**多选时 Agent 每次工具调用必须传入一个已选连接的 `connectionId`；只选一条时可省略。查询不会广播到多个数据源，也不会合并结果。
 - **先看结构再查询：**`mysql_tables` 会返回可读表的列名、类型、可空性、键与注释，帮助 Agent 先确认结构。
 - **默认只读：**行写权限与结构变更权限是相互独立的连接开关，均默认关闭，且各自需要单独风险确认。
 - **受限结构变更：**`mysql_ddl` 与 `mysql_execute` 分离；改动/删除目标受表白名单约束，显式库名前缀必须与连接默认库一致。账号/权限语句与库级语句仍会被拒绝。
@@ -40,10 +41,10 @@
 
 | 工具 | 输入与行为 |
 | --- | --- |
-| `mysql_tables` | 通过 `information_schema` 列出当前连接默认数据库中的表结构，可选 `table` 参数进行不区分大小写的表名过滤，结果遵守表白名单。 |
-| `mysql_query` | 执行一条只读 `SELECT`、`SHOW`、`DESCRIBE`/`DESC` 或 `EXPLAIN`，支持 `?` 位置参数。拒绝多语句 SQL，执行表范围校验，最多返回 2000 行序列化结果，并通过 `truncated` 标记是否截断。开头为 `SELECT` 的语句会自动加入 `MAX_EXECUTION_TIME(15000)` 提示。 |
-| `mysql_execute` | 执行一条 `INSERT`、`UPDATE` 或 `DELETE`，支持 `?` 位置参数。要求选中连接开启 `allowWrite: true`；DDL、事务控制语句、多语句 SQL 及其他语句类型都会被拒绝。 |
-| `mysql_ddl` | 执行一条作用于表、视图或索引的 `CREATE`/`ALTER`/`DROP`/`RENAME`/`TRUNCATE`。要求独立开启 `allowDdl: true`；改动/删除目标遵守表白名单，显式库名前缀必须与连接默认库一致。账号/权限语句与库级 DDL 永久拒绝。 |
+| `mysql_tables` | 通过 `information_schema` 列出一个已选数据源默认数据库中的表结构。多选时传 `connectionId`，单选可省略；可选 `table` 参数进行不区分大小写过滤，结果遵守目标数据源白名单。 |
+| `mysql_query` | 在一个已选数据源执行一条只读 `SELECT`、`SHOW`、`DESCRIBE`/`DESC` 或 `EXPLAIN`，支持 `?` 位置参数。多选时传 `connectionId`，单选可省略。拒绝多语句 SQL，按目标数据源校验表范围，最多返回 2000 行序列化结果并用 `truncated` 标记截断。 |
+| `mysql_execute` | 对一个已选数据源执行 `INSERT`、`UPDATE` 或 `DELETE`，支持 `?` 位置参数。多选时传 `connectionId`，单选可省略；要求目标连接开启 `allowWrite: true`。DDL、事务控制语句、多语句 SQL 及其他语句类型都会被拒绝。 |
+| `mysql_ddl` | 在一个已选数据源执行一条作用于表、视图或索引的 `CREATE`/`ALTER`/`DROP`/`RENAME`/`TRUNCATE`。多选时传 `connectionId`，单选可省略。要求目标连接独立开启 `allowDdl: true`；改动/删除目标遵守其表白名单，显式库名前缀必须与其默认库一致。账号/权限语句与库级 DDL 永久拒绝。 |
 
 结构变更权限需要单独开启并确认风险。授权后，可以直接提出建表需求，例如：
 
@@ -59,6 +60,18 @@
 请先使用 mysql_tables 查看可用表结构，再使用 mysql_query 回答我的问题。不要修改数据。
 ```
 
+### 多数据源路由示例
+
+当一个会话同时选中多个数据源时，每次数据库调用都要明确路由到其中一个：
+
+```text
+请分别检查当前已选的两个数据源。对每个数据源先调用 mysql_tables，然后执行：
+SELECT @@port AS server_port, DATABASE() AS database_name, VERSION() AS server_version
+每次调用只传入一个已选的 connectionId，给每条结果标注数据源，不要广播，也不要合并结果。
+```
+
+选择器的每次点击都会立即更新当前会话的已选集合。配置了多个数据源的新会话初始为空；只配置一条时，会在会话首次初始化时自动选中；取消最后一条后会保持明确的空选择，直到用户重新选择。选择状态只保存在运行时内存中，DSH 重启后不会恢复。
+
 ## 环境要求与兼容性
 
 - 需要带 **Web profile** 的 DSH 安装，以及 Node.js **20 或更高版本**。
@@ -73,7 +86,7 @@
 ### 从 GitHub 安装
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.0
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.1
 ```
 
 ### 从 npm 安装
@@ -92,7 +105,7 @@ dsh plugin --profile web add dsh-mysql
 irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.3.0/scripts/install.ps1 | iex
 ```
 
-安装完成后重启 `dsh web`，再打开 **设置 → MySQL 数据库** 添加并测试连接，最后通过输入栏旁的数据库按钮选择连接。
+安装完成后重启 `dsh web`，再打开 **设置 → MySQL 数据库** 添加并测试一条或多条连接，最后通过输入栏旁的数据库按钮选择数据源。
 
 验证插件是否进入当前 profile：
 
@@ -127,7 +140,7 @@ dsh --profile demo --dump-config
 ## 快速开始
 
 1. 打开 **设置 → MySQL 数据库**，点击 **添加连接**。填写主机、端口、用户名、密码和默认数据库；可选填可读表名，并且只在确有需要时开启写权限。测试连接通过后保存。
-2. 打开一个会话，点击输入栏左侧的数据库按钮，为当前会话选择连接。只有一个连接时会自动选中；有多个连接时需要手动选择。
+2. 打开一个会话，点击输入栏左侧的数据库按钮，为该会话选择或取消选择一个或多个数据源；每次点击立即生效，面板保持打开。只有一条连接时会在会话首次初始化时自动选中。多选时 Agent 每次工具调用通过 `connectionId` 选择一个目标；取消全部后，该会话的数据库工具不可用。选择状态不会跨 DSH 重启保留。
 3. 直接询问数据库问题。Agent 可以先用 `mysql_tables` 查看结构，再用 `mysql_query` 读取数据；显式开启行写权限后才可使用 `mysql_execute`，独立开启结构变更权限后才可使用 `mysql_ddl`。
 
 ## 截图
@@ -144,7 +157,7 @@ dsh --profile demo --dump-config
 
 ![添加 MySQL 连接表单](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/settings-add-form.png)
 
-### 为会话选择连接
+### 为会话选择数据源
 
 即使尚未选择连接，输入栏也会显示数据库控制按钮；列表收起时，文字右侧显示向下箭头：
 
@@ -154,7 +167,7 @@ dsh --profile demo --dump-config
 
 ![会话级数据库连接选择器](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-picker.png)
 
-选择连接后，输入栏会显示连接名称、绿色连接状态点和向下箭头；选中的连接还会出现在发送给 Agent 的会话上下文中：
+只选一条连接时，输入栏会显示连接名称、绿色状态点和向下箭头；多选时胶囊只显示简短数量，不堆叠连接名称标签。面板沿用现有卡片列表和选中行样式，每次点击立即生效。所有已选数据源及各自权限会出现在发送给 Agent 的会话上下文中：
 
 ![会话上下文中的已选连接](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-context.png)
 
@@ -180,7 +193,8 @@ Agent 执行只读查询后，工具结果会显示在对话中：
 
 ## 已知限制
 
-- 每个会话只有一个当前数据库连接；切换连接不会改变其他会话。
+- 每个会话独立选择零个、一个或多个数据源；更改不会影响其他会话。空选择会禁用该会话的数据库工具；选择状态为运行时内存状态，DSH 重启后重新初始化。
+- 每次工具调用仅针对一个数据源；多选时必须指定 `connectionId`，不会向多个数据库广播或合并结果。
 - `mysql_tables` 使用连接的 `DATABASE()` 值，只发现默认数据库中的表；未配置默认库时列表可能为空，也不会自动浏览其他数据库。
 - 表白名单是轻量级实现，只检查常见的表引用位置，不解析 MySQL 的全部语法形式。
 - 2000 行限制作用于数据库结果已经获取之后的 JSON 返回内容。
@@ -196,13 +210,13 @@ Agent 执行只读查询后，工具结果会显示在对话中：
 Host mysql 服务
         │  会话级选择 + 懒加载 mysql2 连接池
         ├── 本地 JSON：$DSH_HOME/storages/dsh-mysql/connections.json
-        └── systemPrompt.context：当前连接 + 可读表范围
+        └── systemPrompt.context：已选数据源 + 各自范围与权限
 ```
 
-- **Host bundle（`lib/index.js`）**：注册四个模型工具，管理懒加载的 mysql2 连接池，持久化连接配置，维护会话级选择，并提供 `mysql` 服务。
+- **Host bundle（`lib/index.js`）**：注册四个模型工具，管理懒加载的 mysql2 连接池，持久化连接配置，维护每个会话的已选数据源集合，并提供 `mysql` 服务。已解析目标的工具结果会带上数据源名称和 `connectionId`；已解析目标的错误也会使用相同前缀，但不会暴露凭据。
 - **Typert 清单（`lib/typert.host.js`）**：通过 `remote.mysql.*` 向浏览器暴露连接增删改查、测试、选择和表列表方法。
 - **浏览器 bundle（`lib/client.js`）**：注册 `conversation.input.left` 数据库控件与 `settings.section` 连接管理页面；界面样式使用 DSH 的 `--dsw-*` 主题令牌。
-- 当前连接通过 `systemPrompt.context` 作为动态尾部上下文追加，因此切换连接不会重写稳定的系统提示词前缀缓存。
+- 已选数据源通过 `systemPrompt.context` 作为动态尾部上下文追加，因此调整选择集合不会重写稳定的系统提示词前缀缓存。多选时，上下文会要求模型每次工具调用只传入一个已选数据源的 `connectionId`。
 
 ## 从预设内嵌 MySQL 工具迁移
 
@@ -224,7 +238,7 @@ Host mysql 服务
 <details>
 <summary><b>提示“尚未配置任何 MySQL 连接”或“当前会话尚未选择数据库连接”</b></summary>
 
-打开 **设置 → MySQL 数据库**，至少保存一个连接；回到会话后点击数据库按钮并选择连接。只有一个连接时会自动选中，多个连接时需要手动选择。
+打开 **设置 → MySQL 数据库**，至少保存一个连接；回到会话后点击数据库按钮并选择一个或多个数据源。只有一条连接时会在会话首次初始化时自动选中；多个连接初始为空。若取消了全部选择，再选中任意数据源即可恢复工具访问。
 
 </details>
 
@@ -283,7 +297,7 @@ pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # 额外用真实 
 将打包结果安装到独立测试 profile，验证真实 bundle：
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.3.0.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.3.1.tgz
 dsh --profile demo --dump-config
 ```
 

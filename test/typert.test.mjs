@@ -10,6 +10,8 @@ assert.equal(TYPERT.face, 'host')
 assert.ok(Array.isArray(TYPERT.schemas))
 assert.ok(Array.isArray(TYPERT.invocations))
 assert.equal(TYPERT.invocations.length, 7)
+assert.match(TYPERT.model.services[0].members.find((member) => member.name === 'selectConnection').jsDoc, /connectionIds: string\[\]/)
+assert.match(TYPERT.model.services[0].members.find((member) => member.name === 'getSelection').jsDoc, /connectionIds/)
 
 const expectedMethods = [
   'listConnections',

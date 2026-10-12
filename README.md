@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>MySQL connections and guarded database tools for DeepSeek Harness</b><br />
-  Configure connections once, choose one per conversation, and let your agent inspect or query the selected database.
+  Configure connections once, choose one or more per conversation, and let your agent route each call to a selected data source.
 </p>
 
 <p align="center">
@@ -23,13 +23,14 @@ English | [中文](README.zh-CN.md)
 | Surface | What it provides |
 | --- | --- |
 | **Settings → MySQL 数据库** | Add, edit, delete, and test connections. Configure host, port, user, password, default database, table scope, row-write permission, and independent schema-change permission. |
-| **Composer database button** | Choose the connection for the current session. The selection is shown beside the input and can be changed at any time. |
-| **Agent tools + runtime context** | `mysql_tables`, `mysql_query`, `mysql_execute`, and `mysql_ddl`, plus a per-turn context snapshot describing the selected connection and its capabilities. |
+| **Composer database button** | Select or deselect one or more data sources for the current session. Each click takes effect immediately; the composer pill shows the single name or a compact selected count. |
+| **Agent tools + runtime context** | `mysql_tables`, `mysql_query`, `mysql_execute`, and `mysql_ddl`, plus a per-turn context snapshot listing this session's selected sources and capabilities. |
 
 ## Features
 
 - **Multiple connections:** keep separate development, staging, or production data sources in one DSH installation.
-- **Per-session selection:** changing the connection in one conversation does not silently switch another conversation.
+- **Per-session multi-selection:** each conversation independently selects zero, one, or multiple sources. Select/deselect takes effect immediately; clearing the last selection leaves the session without database access until a source is selected again. A session with multiple configured sources starts empty; a sole configured source is auto-selected on first initialization. Selection is runtime-only and is not restored after a DSH restart.
+- **One target per tool call:** when multiple sources are selected, the agent passes one selected `connectionId` to each tool call. A single selected source may be inferred. Queries are never broadcast or merged across sources.
 - **Schema-first workflow:** `mysql_tables` exposes readable columns, types, nullability, keys, and comments before a query is written.
 - **Read-only by default:** row-write access and schema-change access are independent per-connection settings, both disabled by default and each requiring its own risk acknowledgement.
 - **Scoped schema changes:** `mysql_ddl` is separate from `mysql_execute`; changed/deleted targets are checked against the table allowlist, and explicit database qualifiers must match the connection's default database. Account/privilege and database-level statements remain refused.
@@ -40,10 +41,10 @@ English | [中文](README.zh-CN.md)
 
 | Tool | Accepted input and behavior |
 | --- | --- |
-| `mysql_tables` | Lists columns from the selected database through `information_schema`. Optional `table` filtering is case-insensitive. Results respect the configured table allowlist. |
-| `mysql_query` | Executes one read-only `SELECT`, `SHOW`, `DESCRIBE`/`DESC`, or `EXPLAIN` statement with optional `?` parameters. It rejects multi-statement SQL, applies the table-scope check, and returns up to 2,000 serialized rows with a `truncated` flag. A `MAX_EXECUTION_TIME(15000)` hint is added to leading `SELECT` statements. |
-| `mysql_execute` | Executes one `INSERT`, `UPDATE`, or `DELETE` statement with optional `?` parameters. It requires `allowWrite: true`; DDL, transaction-control statements, multi-statement SQL, and other statement types are rejected. |
-| `mysql_ddl` | Executes one `CREATE`/`ALTER`/`DROP`/`RENAME`/`TRUNCATE` statement on tables, views, or indexes. It requires the independent `allowDdl: true` setting; changed/deleted targets obey the allowlist and all explicit database qualifiers must match the connection's default database. Account/privilege statements and database-level DDL are always rejected. |
+| `mysql_tables` | Lists columns from one selected database through `information_schema`. Pass `connectionId` when multiple sources are selected; it may be omitted when exactly one is selected. Optional `table` filtering is case-insensitive. Results respect that source's table allowlist. |
+| `mysql_query` | Executes one read-only `SELECT`, `SHOW`, `DESCRIBE`/`DESC`, or `EXPLAIN` statement against one selected source. Pass `connectionId` when multiple sources are selected; it may be omitted for a single selection. Optional `?` parameters are supported. It rejects multi-statement SQL, applies the target source's table-scope check, and returns up to 2,000 serialized rows with a `truncated` flag. |
+| `mysql_execute` | Executes one `INSERT`, `UPDATE`, or `DELETE` statement against one selected source. Pass `connectionId` when multiple sources are selected; it may be omitted for a single selection. Requires that target's `allowWrite: true`; DDL, transaction-control statements, multi-statement SQL, and other statement types are rejected. |
+| `mysql_ddl` | Executes one `CREATE`/`ALTER`/`DROP`/`RENAME`/`TRUNCATE` statement on tables, views, or indexes in one selected source. Pass `connectionId` when multiple sources are selected; it may be omitted for a single selection. It requires that target's independent `allowDdl: true` setting; changed/deleted targets obey its allowlist and all explicit database qualifiers must match its default database. Account/privilege statements and database-level DDL are always rejected. |
 
 Schema changes require a separate opt-in and risk acknowledgement. Once enabled, you can ask the agent to create a table, for example:
 
@@ -59,6 +60,18 @@ A typical read-only request is:
 Use mysql_tables to inspect the available schema first, then use mysql_query to answer my question. Do not modify data.
 ```
 
+### Multi-source routing example
+
+When a conversation has more than one selected source, route every database call explicitly:
+
+```text
+Inspect both selected sources separately. For each source, call mysql_tables and then run:
+SELECT @@port AS server_port, DATABASE() AS database_name, VERSION() AS server_version
+Pass exactly one selected connectionId per call, label every result with its source, and do not merge or broadcast results.
+```
+
+The picker changes the session's selected set immediately. A session with multiple configured sources starts empty, a sole configured source is auto-selected on first initialization, and clearing the final source leaves the session explicitly empty until the user selects a source again. Selection is kept in memory and is not restored after a DSH restart.
+
 ## Requirements and compatibility
 
 - A DSH installation with the **Web profile** and Node.js **20 or newer**.
@@ -73,7 +86,7 @@ Use mysql_tables to inspect the available schema first, then use mysql_query to 
 ### Install from GitHub
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.0
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.1
 ```
 
 ### Install from npm
@@ -92,7 +105,7 @@ The repository also provides a Windows installer that checks for `dsh`, prepares
 irm https://raw.githubusercontent.com/1321928757/dsh-mysql/v0.3.0/scripts/install.ps1 | iex
 ```
 
-After installation, restart `dsh web`. Then open **Settings → MySQL 数据库**, add and test a connection, and select it from the database button beside the composer.
+After installation, restart `dsh web`. Then open **Settings → MySQL 数据库**, add and test one or more connections, and select them from the database button beside the composer.
 
 Verify that the bundle is in the profile:
 
@@ -127,7 +140,7 @@ dsh --profile demo --dump-config
 ## Quick start
 
 1. Open **Settings → MySQL 数据库** and click **添加连接**. Fill in the host, port, username, password, and default database. Optionally add readable table names and enable write permission only when needed. Test the connection, then save it.
-2. Open a conversation and click the database button on the left of the composer. Select a connection for that session. If exactly one connection exists, it is selected automatically.
+2. Open a conversation and click the database button on the left of the composer. Select or deselect one or more connections for that session; each click takes effect immediately and the picker stays open. If exactly one connection is configured, it is selected automatically when the session first initializes. With multiple selections, the agent chooses a target per tool call by `connectionId`; deselecting every source disables database tools for that session. Selection is not persisted across a DSH restart.
 3. Ask a database question. The agent can inspect the schema with `mysql_tables`, read with `mysql_query`, use `mysql_execute` only for an explicitly writable connection, or use `mysql_ddl` only when the separate schema-change permission is enabled.
 
 ## Screenshots
@@ -144,7 +157,7 @@ The form can be opened below the saved connection cards without leaving the sett
 
 ![Add MySQL connection form](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/settings-add-form.png)
 
-### Select a connection for a session
+### Select data sources for a session
 
 The composer shows the database control even before a connection is selected. Its arrow points down while the picker is closed:
 
@@ -154,7 +167,7 @@ Click it to search and choose from the configured connections. The arrow points 
 
 ![Per-session database connection picker](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-picker.png)
 
-After a connection is selected, its name, green status dot, and down arrow appear in the composer. The selected connection is also included in the conversation context shown to the agent:
+After one connection is selected, its name, green status dot, and down arrow appear in the composer. With multiple selections, the compact composer pill shows the selected count instead of stacking connection-name chips. The picker uses the existing card layout and selected-row treatment; each change applies immediately. The selected sources and their individual capabilities are included in the conversation context shown to the agent:
 
 ![Selected connection in conversation context](https://raw.githubusercontent.com/1321928757/dsh-mysql/main/assets/conversation-context.png)
 
@@ -180,7 +193,8 @@ Passwords are stored as plain text in `$DSH_HOME/storages/dsh-mysql/connections.
 
 ## Known limitations
 
-- There is one active database selection per conversation session; selecting a connection does not change other sessions.
+- Each conversation session independently selects zero, one, or multiple database sources; changes do not affect other sessions. An empty selection disables database tools for that session. Selection state is kept in memory and reinitialized after a DSH restart.
+- Each tool call targets exactly one source; when multiple sources are selected, `connectionId` is required. The plugin does not broadcast queries or merge results across databases.
 - `mysql_tables` uses the connection's `DATABASE()` value, so schema discovery may be empty when no default database is configured. It does not browse arbitrary databases.
 - The table allowlist is intentionally lightweight and checks common table-reference positions rather than parsing every MySQL grammar form.
 - The 2,000-row limit applies to the returned JSON payload after the database response has been fetched.
@@ -196,13 +210,13 @@ Composer / Settings UI
 Host mysql service
         │  per-session selection + lazy mysql2 pool
         ├── local JSON: $DSH_HOME/storages/dsh-mysql/connections.json
-        └── systemPrompt.context: selected connection + readable tables
+        └── systemPrompt.context: selected sources + per-source scopes/capabilities
 ```
 
-- **Host bundle (`lib/index.js`)** registers the four model tools, manages lazy mysql2 pools, persists connections, tracks the session selection, and provides the `mysql` service.
+- **Host bundle (`lib/index.js`)** registers the four model tools, manages lazy mysql2 pools, persists connections, tracks each session's selected source set, and provides the `mysql` service. Every resolved tool result includes the selected source name and `connectionId`; a resolved error is prefixed the same way without exposing credentials.
 - **Typert manifest (`lib/typert.host.js`)** exposes connection CRUD, testing, selection, and table-list methods to the browser through `remote.mysql.*`.
 - **Browser bundle (`lib/client.js`)** registers the `conversation.input.left` database control and the `settings.section` connection-management page. UI styles consume DSH `--dsw-*` theme tokens.
-- The selected connection is added through `systemPrompt.context` as a dynamic tail section, so switching connections does not rewrite the stable cached system-prompt prefix.
+- The selected sources are added through `systemPrompt.context` as a dynamic tail section, so changing the selection set does not rewrite the stable cached system-prompt prefix. When multiple sources are selected, the context instructs the model to pass exactly one selected `connectionId` per tool call.
 
 ## Migrating from a preset-embedded MySQL tool
 
@@ -224,7 +238,7 @@ Restart the DSH Web process after installation or update. Then verify the profil
 <details>
 <summary><b>“No MySQL connection is configured” or “this session has not selected a connection”</b></summary>
 
-Open **Settings → MySQL 数据库** and save at least one connection. In the conversation, click the database button and select a connection. A single saved connection is auto-selected, but multiple connections require an explicit per-session choice.
+Open **Settings → MySQL 数据库** and save at least one connection. In the conversation, click the database button and select one or more sources for this session. A single saved source is auto-selected when the session first initializes; multiple configured sources start with none selected. If you have cleared all selections, select a source again to restore tool access.
 
 </details>
 
@@ -283,7 +297,7 @@ pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # ... plus a UI-dr
 Install the packed artifact into a scratch profile and verify the real bundle:
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.3.0.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.3.1.tgz
 dsh --profile demo --dump-config
 ```
 

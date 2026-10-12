@@ -1,6 +1,6 @@
 {
   "name": "dsh-mysql",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DeepSeek Harness MySQL 连接插件：在设置页配置多套 MySQL 连接（每连接可配表白名单、行写与结构变更权限），输入栏一键切换当前会话的数据库连接，为所有 Agent 预设全局提供 mysql_query / mysql_tables / mysql_execute / mysql_ddl 工具。MySQL connector for DeepSeek Harness: configure multiple connections in settings (per-connection table allowlist, row-write and schema-change permissions), switch the active connection from the composer, and expose mysql_query / mysql_tables / mysql_execute / mysql_ddl tools globally to every agent preset.",
   "type": "module",
   "main": "lib/index.js",
@@ -19,6 +19,7 @@
   "files": [
     "lib/index.js",
     "lib/shared.js",
+    "lib/session-selection.js",
     "lib/typert.host.js",
     "lib/client.js",
     "cordis.patch.yml",
