@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.2
+
+- 修复 Gemini 等原生 FunctionDeclaration 严格校验下的调用失败：`mysql_query`、`mysql_execute`、`mysql_ddl` 的 `params` 原来是 `{ type: 'array' }`，缺少 `items`，整个 `GenerateContentRequest` 会被服务端以 HTTP 400 拒绝（`items: {}` 同样无效）。现统一声明为 `items: { type: 'string' }`，位置参数本就是字符串数组。
+- 三处 `params` 抽成 `lib/index.js` 中的共享常量 `SQL_PARAMS_SCHEMA`，避免三份声明各自漂移；其余 schema 字段（`connectionId`/`sql`/`table` 声明、`required: ['sql']`、`additionalProperties`、`output`、`timeoutMs`）与执行路径均未改动，`params` 仍为可选参数。
+- `test/host-tools.test.mjs` 新增递归不变量测试：遍历所有已注册工具的 schema，任何 `type: 'array'` 节点都必须带有声明了 `type` 的 `items`，失败时打印具体 schema 路径；测试按实际注册的 schema 驱动，新增数组参数会自动纳入覆盖。
+
 ## v0.3.1
 
 - 新增会话级多数据源选择：每个会话可选择零个、一个或多个数据源；多选时每次工具调用必须明确指定一个 `connectionId`，不会广播或合并结果。

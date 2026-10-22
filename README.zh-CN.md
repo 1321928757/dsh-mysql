@@ -86,7 +86,7 @@ SELECT @@port AS server_port, DATABASE() AS database_name, VERSION() AS server_v
 ### 从 GitHub 安装
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.1
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.2
 ```
 
 ### 从 npm 安装
@@ -297,7 +297,7 @@ pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # 额外用真实 
 将打包结果安装到独立测试 profile，验证真实 bundle：
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.3.1.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.3.2.tgz
 dsh --profile demo --dump-config
 ```
 

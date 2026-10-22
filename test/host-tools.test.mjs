@@ -35,6 +35,30 @@ assert.equal(tools.size, 4)
 for (const name of ['mysql_query', 'mysql_tables', 'mysql_execute', 'mysql_ddl']) {
   assert.equal(tools.get(name).parameters.properties.connectionId.type, 'string')
 }
+
+// 不变量：任何已注册工具的 schema 里，type === 'array' 的节点都必须带一个声明了 type 的 items。
+// Gemini 原生 FunctionDeclaration 要求数组带带类型的 items，缺了（或给 {}）会让整个请求被 HTTP 400 拒绝。
+// 递归遍历实际注册的 schema（而不是写死 params 名字），这样以后新增的数组参数也会被覆盖。
+function assertTypedArrayItems(node, path, seen) {
+  if (node === null || typeof node !== 'object') return
+  if (seen.has(node)) return
+  seen.add(node)
+  if (Array.isArray(node)) {
+    node.forEach((child, index) => assertTypedArrayItems(child, path + '[' + index + ']', seen))
+    return
+  }
+  if (node.type === 'array') {
+    assert.ok(node.items !== null && typeof node.items === 'object' && !Array.isArray(node.items), path + ': array schema must declare an items object')
+    assert.equal(typeof node.items.type, 'string', path + '.items: array items must declare a type')
+    assert.ok(node.items.type.length > 0, path + '.items: array items type must not be empty')
+  }
+  for (const key of Object.keys(node)) assertTypedArrayItems(node[key], path + '.' + key, seen)
+}
+for (const [name, tool] of tools) {
+  assertTypedArrayItems(tool.parameters, 'tools.' + name + '.parameters', new Set())
+  const params = tool.parameters.properties.params
+  if (params) assert.equal(params.items.type, 'string', name + ': params must declare string items')
+}
 const initial = await selection('multi')
 assert.deepEqual(initial.connectionIds, [])
 assert.equal(initial.connectionId, null)

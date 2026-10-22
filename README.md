@@ -86,7 +86,7 @@ The picker changes the session's selected set immediately. A session with multip
 ### Install from GitHub
 
 ```powershell
-dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.1
+dsh plugin --profile web add github:1321928757/dsh-mysql#v0.3.2
 ```
 
 ### Install from npm
@@ -297,7 +297,7 @@ pwsh -NoProfile -File scripts\dsh02-web-smoke.ps1 -RpcProbe   # ... plus a UI-dr
 Install the packed artifact into a scratch profile and verify the real bundle:
 
 ```powershell
-dsh plugin --profile demo add .\dsh-mysql-0.3.1.tgz
+dsh plugin --profile demo add .\dsh-mysql-0.3.2.tgz
 dsh --profile demo --dump-config
 ```
 
