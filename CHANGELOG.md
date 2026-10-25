@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.3
+
+- 修复连接选择面板「透字」：面板背景用的是 DSH 菜单材质（`--dsw-menu-surface-fill`，浅色 α 0.58 / 深色 α 0.45），而材质必须与 `--dsw-menu-backdrop-filter`（`blur(40px) saturate(150%)`）成对使用。此前只取了填充、没取模糊，于是面板变成一块无模糊的半透明板，对话正文原样透出。现两者均通过 `--dm-panel-fill` / `--dm-panel-blur` 收口，换回实体面板只需改这两行。
+- 粘性页眉/页脚不再 `background: inherit`（继承的是半透明值），改用 `--dsw-alias-menu-group-header-fill`（α 0.94）并叠同款模糊，滚动时行内容不再从页眉/页脚下方透出；两者补 `z-index: 1`，避免后置的行元素画在页眉之上。
+- 面板边缘改用 `--dsw-elevation-prominent`（0.5px 描边 + 柔和投影）替代 `1px border-l1` + `--dsw-shadow-lv3`；圆角对齐 DSH 半径刻度（16px）。新增 `@supports` 降级：渲染器不支持背景模糊、或宿主没有材质 token 时自动退回不透明面板，不会停在「无模糊半透明」状态。
+- 修复搜索框与设置页输入框「只有边框、没有底色」：`--dsw-alias-bg-input` 在 DSH 0.2.1 中已不存在（整包扫描 0 命中），所有 `var(--dsw-alias-bg-input, transparent)` 都静默退化为透明。选择面板的搜索框改用 6% `label-primary` 混合色（浅色偏暗、深色偏亮），并对无 `color-mix` 能力的环境回退到 `--dsw-alias-bg-module-platform`。
+- 行状态重排：去掉常驻的测试状态行（成功/失败改由右侧操作列的图标 + `title`/`aria-label` 承载，仅失败时在行内补一行原因），行高从约 99px 降到 70.8px，同样高度能多显示 2~3 个连接；hover 与选中态分别使用 `--dsw-alias-interactive-bg-hover` / `-active`，选中仍由左侧对勾与「已选择」角标承担。
+- 标签（只读/可写/结构变更/全部表/表名）对齐 DSH 官方 tag 量纲：11px / 17px 行高 / `1px 8px` 内边距 / 字重 500 / 有底色不描边 / `corner-shape: round`；默认态（只读、全部表）降为纯文字，只有异常能力（可写、结构变更）带底色，结构变更由墨色改为业务蓝，避免与「已选择」角标和主按钮混淆。表名单行容量 4 → 3，溢出的 `+N 表` 悬停可看完整列表。
+- 面板高度按触发器上方实测空间钳制（打开与窗口 resize 时重算），窗口偏矮时不再顶出视口。
+- 新增 `docs/dsh-menu-surface-guide.md`：DSH 插件弹层「透字」的成因、两种修法、可直接粘贴的审计脚本（已在夹具上验证）与验收清单，供其它存在同类问题的插件参考。
+
 ## v0.3.2
 
 - 修复 Gemini 等原生 FunctionDeclaration 严格校验下的调用失败：`mysql_query`、`mysql_execute`、`mysql_ddl` 的 `params` 原来是 `{ type: 'array' }`，缺少 `items`，整个 `GenerateContentRequest` 会被服务端以 HTTP 400 拒绝（`items: {}` 同样无效）。现统一声明为 `items: { type: 'string' }`，位置参数本就是字符串数组。
